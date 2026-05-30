@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Domain-layer bootstrap for AI Assist product auth, tenancy, and OAuth token metadata.",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "coverage": "node --experimental-test-coverage --test"
   },
   "engines": {
     "node": ">=20"

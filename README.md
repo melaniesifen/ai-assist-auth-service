@@ -49,8 +49,21 @@ Planned AWS and Google integrations should wrap the existing domain contracts:
 - DynamoDB token repository implementing the same repository shape as `InMemoryOAuthTokenRepository`.
 - HTTP handlers for `/auth/session`, `/oauth/google/start`, `/oauth/google/callback`, `/oauth/google/status`, and `/oauth/google/connection`.
 
-Run tests:
+
+## Testing And Coverage
+
+Run the unit tests with either command:
 
 ```sh
+node --test
 npm test
 ```
+
+View the built-in coverage report in the terminal:
+
+```sh
+node --experimental-test-coverage --test
+npm run coverage
+```
+
+The coverage command uses Node's built-in test runner and prints a text report. If later tooling writes HTML, LCOV, TAP, JUnit, or build output, those generated paths are ignored by `.gitignore`.
