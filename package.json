@@ -1,0 +1,13 @@
+{
+  "name": "ai-assist-auth-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Domain-layer bootstrap for AI Assist product auth, tenancy, and OAuth token metadata.",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
