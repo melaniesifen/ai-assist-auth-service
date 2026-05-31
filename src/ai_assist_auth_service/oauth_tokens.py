@@ -1,0 +1,305 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from types import MappingProxyType
+from typing import Any, Callable
+
+from .errors import AUTH_ERROR_CODES, AuthError, forbidden, validation_failed
+from .identity import require_identity
+from .validation import freeze, clone_datetime, require_datetime, require_non_empty_string, to_iso
+
+
+OAUTH_PROVIDERS = MappingProxyType({"GOOGLE": "google"})
+OAUTH_TOKEN_STATUS = MappingProxyType({"ACTIVE": "active", "REVOKED": "revoked"})
+
+_OAUTH_TOKEN_PURPOSE = "oauth-token"
+
+
+class InMemoryOAuthTokenRepository:
+    def __init__(self) -> None:
+        self.records: dict[str, dict[str, Any]] = {}
+
+    def upsert(self, record: dict[str, Any]) -> dict[str, Any]:
+        self.records[_token_key(record)] = _clone_record(record)
+        return _clone_record(record)
+
+    def get(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+        provider: str,
+        google_account_id: str,
+    ) -> dict[str, Any] | None:
+        record = self.records.get(
+            _token_key(
+                {
+                    "tenantId": tenant_id,
+                    "userId": user_id,
+                    "provider": provider,
+                    "googleAccountId": google_account_id,
+                }
+            )
+        )
+        return _clone_record(record) if record else None
+
+    def list_for_user(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+        provider: str | None = None,
+    ) -> list[dict[str, Any]]:
+        return [
+            _clone_record(record)
+            for record in self.records.values()
+            if record["tenantId"] == tenant_id
+            and record["userId"] == user_id
+            and (provider is None or record["provider"] == provider)
+        ]
+
+
+class OAuthTokenService:
+    def __init__(
+        self,
+        *,
+        tenant_directory: Any,
+        token_repository: InMemoryOAuthTokenRepository,
+        token_protector: Any,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
+        if tenant_directory is None:
+            raise TypeError("tenantDirectory is required.")
+        if token_repository is None:
+            raise TypeError("tokenRepository is required.")
+        if token_protector is None or not callable(getattr(token_protector, "encrypt", None)):
+            raise TypeError("tokenProtector.encrypt is required.")
+        self.tenant_directory = tenant_directory
+        self.token_repository = token_repository
+        self.token_protector = token_protector
+        self.clock = clock or (lambda: datetime.now(timezone.utc))
+
+    def connect_google(
+        self,
+        *,
+        identity: dict[str, Any],
+        google_account_id: str,
+        scopes: list[Any],
+        access_token: str,
+        refresh_token: str | None = None,
+        expires_at: datetime,
+    ) -> dict[str, Any]:
+        require_identity(identity)
+        self.tenant_directory.assert_active_membership(
+            tenant_id=identity["tenantId"], user_id=identity["userId"]
+        )
+        try:
+            require_non_empty_string(google_account_id, "googleAccountId")
+        except TypeError:
+            raise validation_failed("googleAccountId", "Google account ID is required.")
+        try:
+            require_non_empty_string(access_token, "accessToken")
+        except TypeError:
+            raise validation_failed("accessToken", "Google OAuth access token is required.")
+        normalized_scopes = _normalize_scopes(scopes)
+        now = self.clock()
+        try:
+            token_expires_at = require_datetime(expires_at, "expiresAt")
+        except (TypeError, ValueError):
+            raise validation_failed("expiresAt", "Google OAuth token expiry must be a valid datetime.")
+        context = _encryption_context(identity, OAUTH_PROVIDERS["GOOGLE"])
+        existing = self.token_repository.get(
+            tenant_id=identity["tenantId"],
+            user_id=identity["userId"],
+            provider=OAUTH_PROVIDERS["GOOGLE"],
+            google_account_id=google_account_id,
+        )
+
+        record = {
+            "tenantId": identity["tenantId"],
+            "userId": identity["userId"],
+            "provider": OAUTH_PROVIDERS["GOOGLE"],
+            "googleAccountId": google_account_id,
+            "scopes": normalized_scopes,
+            "accessTokenCiphertext": self.token_protector.encrypt(access_token, context=context),
+            "refreshTokenCiphertext": (
+                self.token_protector.encrypt(refresh_token, context=context)
+                if refresh_token
+                else existing.get("refreshTokenCiphertext")
+                if existing
+                else None
+            ),
+            "expiresAt": clone_datetime(token_expires_at),
+            "createdAt": existing["createdAt"] if existing else now,
+            "updatedAt": now,
+            "revokedAt": None,
+            "status": OAUTH_TOKEN_STATUS["ACTIVE"],
+        }
+        return _token_metadata(self.token_repository.upsert(record), now)
+
+    def get_google_status(
+        self,
+        *,
+        identity: dict[str, Any],
+        google_account_id: str | None = None,
+    ) -> dict[str, Any]:
+        require_identity(identity)
+        self.tenant_directory.assert_active_membership(
+            tenant_id=identity["tenantId"], user_id=identity["userId"]
+        )
+        if google_account_id:
+            record = self.token_repository.get(
+                tenant_id=identity["tenantId"],
+                user_id=identity["userId"],
+                provider=OAUTH_PROVIDERS["GOOGLE"],
+                google_account_id=google_account_id,
+            )
+            records = [record] if record else []
+        else:
+            records = self.token_repository.list_for_user(
+                tenant_id=identity["tenantId"],
+                user_id=identity["userId"],
+                provider=OAUTH_PROVIDERS["GOOGLE"],
+            )
+
+        now = self.clock()
+        accounts = [_token_metadata(record, now) for record in records]
+        return freeze({
+            "tenantId": identity["tenantId"],
+            "userId": identity["userId"],
+            "provider": OAUTH_PROVIDERS["GOOGLE"],
+            "connected": any(_is_google_token_available(record, now) for record in records),
+            "accounts": accounts,
+        })
+
+    def assert_google_token_usable(
+        self,
+        *,
+        identity: dict[str, Any],
+        google_account_id: str,
+    ) -> dict[str, Any]:
+        require_identity(identity)
+        self.tenant_directory.assert_active_membership(
+            tenant_id=identity["tenantId"], user_id=identity["userId"]
+        )
+        record = self.token_repository.get(
+            tenant_id=identity["tenantId"],
+            user_id=identity["userId"],
+            provider=OAUTH_PROVIDERS["GOOGLE"],
+            google_account_id=google_account_id,
+        )
+        if record is None:
+            raise AuthError(
+                code=AUTH_ERROR_CODES["OAUTH_TOKEN_NOT_FOUND"],
+                message="Google OAuth connection is not available.",
+                status=403,
+            )
+        now = self.clock()
+        if record["status"] != OAUTH_TOKEN_STATUS["ACTIVE"] or record["revokedAt"]:
+            raise AuthError(
+                code=AUTH_ERROR_CODES["OAUTH_TOKEN_REVOKED"],
+                message="Google OAuth connection must be reconnected.",
+                status=403,
+            )
+        if not _is_google_token_available(record, now):
+            raise AuthError(
+                code=AUTH_ERROR_CODES["OAUTH_TOKEN_REVOKED"],
+                message="Google OAuth connection has expired and cannot be refreshed.",
+                status=403,
+            )
+        return _token_metadata(record, now)
+
+    def revoke_google(
+        self,
+        *,
+        identity: dict[str, Any],
+        google_account_id: str,
+        revoked_at: datetime | None = None,
+    ) -> dict[str, Any]:
+        require_identity(identity)
+        self.tenant_directory.assert_active_membership(
+            tenant_id=identity["tenantId"], user_id=identity["userId"]
+        )
+        record = self.token_repository.get(
+            tenant_id=identity["tenantId"],
+            user_id=identity["userId"],
+            provider=OAUTH_PROVIDERS["GOOGLE"],
+            google_account_id=google_account_id,
+        )
+        if record is None:
+            raise forbidden()
+        effective_revoked_at = clone_datetime(revoked_at or self.clock())
+        record["status"] = OAUTH_TOKEN_STATUS["REVOKED"]
+        record["revokedAt"] = effective_revoked_at
+        record["updatedAt"] = effective_revoked_at
+        record["accessTokenCiphertext"] = None
+        record["refreshTokenCiphertext"] = None
+        return _token_metadata(self.token_repository.upsert(record), self.clock())
+
+
+def _normalize_scopes(scopes: list[Any]) -> list[str]:
+    if not isinstance(scopes, list) or len(scopes) == 0:
+        raise validation_failed("scopes", "At least one OAuth scope is required.")
+    normalized = sorted({str(scope).strip() for scope in scopes if str(scope).strip()})
+    if len(normalized) == 0:
+        raise validation_failed("scopes", "At least one OAuth scope is required.")
+    return normalized
+
+
+def _encryption_context(identity: dict[str, Any], provider: str) -> dict[str, str]:
+    return {
+        "tenantId": identity["tenantId"],
+        "userId": identity["userId"],
+        "provider": provider,
+        "purpose": _OAUTH_TOKEN_PURPOSE,
+    }
+
+
+def _token_metadata(record: dict[str, Any], now: datetime) -> dict[str, Any]:
+    is_expired = record["expiresAt"] <= now
+    refresh_available = bool(record["refreshTokenCiphertext"])
+    is_available = _is_google_token_available(record, now)
+    return freeze({
+        "tenantId": record["tenantId"],
+        "userId": record["userId"],
+        "provider": record["provider"],
+        "googleAccountId": record["googleAccountId"],
+        "scopes": list(record["scopes"]),
+        "status": record["status"],
+        "isExpired": is_expired,
+        "isAvailable": is_available,
+        "refreshRequired": (
+            is_expired and refresh_available and record["status"] == OAUTH_TOKEN_STATUS["ACTIVE"]
+        ),
+        "reconnectRequired": not is_available,
+        "expiresAt": to_iso(record["expiresAt"]),
+        "createdAt": to_iso(record["createdAt"]),
+        "updatedAt": to_iso(record["updatedAt"]),
+        "revokedAt": to_iso(record["revokedAt"]),
+    })
+
+
+def _is_google_token_available(record: dict[str, Any], now: datetime) -> bool:
+    return (
+        record["status"] == OAUTH_TOKEN_STATUS["ACTIVE"]
+        and not record["revokedAt"]
+        and (record["expiresAt"] > now or bool(record["refreshTokenCiphertext"]))
+    )
+
+
+def _token_key(record: dict[str, Any]) -> str:
+    return (
+        f"{record['tenantId']}:{record['userId']}:{record['provider']}:"
+        f"{record['googleAccountId']}"
+    )
+
+
+def _clone_record(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **record,
+        "scopes": list(record["scopes"]),
+        "expiresAt": clone_datetime(record["expiresAt"]),
+        "createdAt": clone_datetime(record["createdAt"]),
+        "updatedAt": clone_datetime(record["updatedAt"]),
+        "revokedAt": clone_datetime(record["revokedAt"]),
+    }

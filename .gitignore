@@ -1,8 +1,14 @@
 prompts/
 feedback/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
 node_modules/
 coverage/
 .coverage/
+htmlcov/
 .nyc_output/
 .c8/
 test-results/

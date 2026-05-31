@@ -25,6 +25,9 @@ Sources:
 ## Pending Architecture Tasks
 
 - [ ] `REPO-001`: Decide final package structure, language, framework, package manager, and production module layout for this repo.
+- [x] `REPO-002`: Migrate the auth service from the JavaScript ESM bootstrap to Python while preserving or intentionally superseding current auth, tenancy, and OAuth behavior.
+- [x] `REPO-002`: Port or replace existing `node:test` coverage with equivalent Python tests and document the Python package layout and local test commands.
+- [x] Migration gate: Do not continue broad new auth-service feature work until the Python migration is completed or explicitly deferred.
 - [x] `AUTH-001`: Add authorization helpers for client-supplied `sessionId`, `resourceId`, `actionId`, and grant IDs as references.
 - [ ] `AUTH-002`: Add product session or JWT validation adapter.
 - [ ] `AUTH-002`: Define token expiry and refresh behavior for backend command APIs and SSE endpoints.

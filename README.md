@@ -1,8 +1,8 @@
 # ai-assist-auth-service
 
-Domain-layer bootstrap for product identity, tenant membership, and Google OAuth token metadata.
+Python domain layer for product identity, tenant membership, and Google OAuth token metadata.
 
-This repo intentionally has no runtime dependencies and no AWS or Google network integration yet. The current code is built for deterministic `node:test` coverage and future adapters.
+This repo intentionally has no runtime dependencies and no AWS or Google network integration yet. The current code uses only the Python standard library for deterministic `unittest` coverage and future adapters.
 
 ## Current Boundary
 
@@ -25,11 +25,11 @@ The service does not own:
 
 ## Domain Modules
 
-- `src/errors.js`: typed `AuthError` values with stable error codes and HTTP status.
-- `src/tenancy.js`: in-memory tenant, user, and membership repository with active-member authorization checks.
-- `src/identity.js`: product session identity derivation that ignores client-supplied identity fields.
-- `src/oauthTokens.js`: Google OAuth token metadata lifecycle using injected encryption.
-- `src/index.js`: public exports.
+- `src/ai_assist_auth_service/errors.py`: typed `AuthError` values with stable error codes and HTTP status.
+- `src/ai_assist_auth_service/tenancy.py`: in-memory tenant, user, and membership repository with active-member authorization checks.
+- `src/ai_assist_auth_service/identity.py`: product session identity derivation that ignores client-supplied identity fields.
+- `src/ai_assist_auth_service/oauth_tokens.py`: Google OAuth token metadata lifecycle using injected encryption.
+- `src/ai_assist_auth_service/__init__.py`: public exports.
 
 ## Security Invariants
 
@@ -53,20 +53,27 @@ Planned AWS and Google integrations should wrap the existing domain contracts:
 
 Implementation tasks are tracked in [TASKS.md](TASKS.md). Update the checkboxes there in the same change that implements or verifies a task.
 
-## Testing And Coverage
+## Local Python Layout
 
-Run the unit tests with either command:
+- Runtime: Python, standard library only.
+- Package source: `src/ai_assist_auth_service/`.
+- Tests: `tests/`.
+- Metadata: `pyproject.toml`.
+
+No virtual environment is required for the current stdlib-only tests. If future work adds third-party dependencies, declare them in repo-local tooling files before relying on them.
+
+## Testing
+
+Run the unit tests with:
 
 ```sh
-node --test
-npm test
+python3 -m unittest discover -s tests
 ```
 
-View the built-in coverage report in the terminal:
+Run a stdlib syntax/import check with:
 
 ```sh
-node --experimental-test-coverage --test
-npm run coverage
+python3 -m compileall -q src tests
 ```
 
-The coverage command uses Node's built-in test runner and prints a text report. If later tooling writes HTML, LCOV, TAP, JUnit, or build output, those generated paths are ignored by `.gitignore`.
+Coverage tooling is not configured because the migration is dependency-free. If later tooling writes virtualenv, cache, coverage, test-report, dependency, or build output, those generated paths are ignored by `.gitignore`.

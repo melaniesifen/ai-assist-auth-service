@@ -16,8 +16,9 @@
 
 ## Commands
 
-- Run tests with `node --test`.
-- `npm` may not be available in this environment; prefer the direct Node command.
+- Run tests with `python3 -m unittest discover -s tests`.
+- Run syntax/import checks with `python3 -m compileall -q src tests`.
+- The current repo is stdlib-only. Do not rely on undeclared third-party Python dependencies.
 
 ## Review Notes
 
