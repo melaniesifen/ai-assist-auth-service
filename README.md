@@ -49,6 +49,9 @@ Planned AWS and Google integrations should wrap the existing domain contracts:
 - DynamoDB token repository implementing the same repository shape as `InMemoryOAuthTokenRepository`.
 - HTTP handlers for `/auth/session`, `/oauth/google/start`, `/oauth/google/callback`, `/oauth/google/status`, and `/oauth/google/connection`.
 
+## Task Breakdown
+
+Implementation tasks are tracked in [TASKS.md](TASKS.md). Update the checkboxes there in the same change that implements or verifies a task.
 
 ## Testing And Coverage
 
