@@ -1,5 +1,26 @@
-import { authenticationRequired, forbidden, invalidAuthToken } from "./errors.js";
+import {
+  authenticationRequired,
+  expiredAuthToken,
+  forbidden,
+  invalidAuthToken,
+  malformedAuthToken,
+  validationFailed
+} from "./errors.js";
 import { requireDate, requireNonEmptyString, toIso } from "./validation.js";
+
+export const AUTH_REFERENCE_TYPES = Object.freeze({
+  SESSION: "session",
+  RESOURCE: "resource",
+  ACTION: "action",
+  GRANT: "grant"
+});
+
+const REFERENCE_ID_FIELDS = Object.freeze({
+  [AUTH_REFERENCE_TYPES.SESSION]: "sessionId",
+  [AUTH_REFERENCE_TYPES.RESOURCE]: "resourceId",
+  [AUTH_REFERENCE_TYPES.ACTION]: "actionId",
+  [AUTH_REFERENCE_TYPES.GRANT]: "grantId"
+});
 
 export class IdentityService {
   constructor({ tenantDirectory, clock = () => new Date(), expectedAudience = null }) {
@@ -32,11 +53,11 @@ export class IdentityService {
       userId = requireNonEmptyString(productSession.userId, "productSession.userId");
       authSubject = requireNonEmptyString(productSession.authSubject, "productSession.authSubject");
     } catch {
-      throw invalidAuthToken("The product auth token is malformed.");
+      throw malformedAuthToken();
     }
 
     if (expiresAt <= this.clock()) {
-      throw invalidAuthToken("The product auth token has expired.");
+      throw expiredAuthToken();
     }
 
     const membershipSummary = this.tenantDirectory.summarizeMembership({ tenantId, userId });
@@ -84,6 +105,41 @@ export class IdentityService {
       userId: identity.userId
     });
     return true;
+  }
+
+  assertAuthorizedReference(identity, reference, { referenceType } = {}) {
+    requireIdentity(identity);
+    const idField = REFERENCE_ID_FIELDS[referenceType];
+    if (!idField) {
+      throw validationFailed("referenceType", "Reference type is not supported.");
+    }
+    if (!reference) {
+      throw forbidden();
+    }
+
+    let referenceId;
+    let referenceTenantId;
+    let referenceUserId;
+    try {
+      referenceId = requireNonEmptyString(reference[idField], `reference.${idField}`);
+      referenceTenantId = requireNonEmptyString(reference.tenantId, "reference.tenantId");
+      referenceUserId = requireNonEmptyString(reference.userId, "reference.userId");
+    } catch {
+      throw forbidden();
+    }
+    if (identity.tenantId !== referenceTenantId || identity.userId !== referenceUserId) {
+      throw forbidden();
+    }
+    this.tenantDirectory.assertActiveMembership({
+      tenantId: identity.tenantId,
+      userId: identity.userId
+    });
+    return Object.freeze({
+      referenceType,
+      referenceId,
+      tenantId: referenceTenantId,
+      userId: referenceUserId
+    });
   }
 }
 

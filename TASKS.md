@@ -25,10 +25,10 @@ Sources:
 ## Pending Architecture Tasks
 
 - [ ] `REPO-001`: Decide final package structure, language, framework, package manager, and production module layout for this repo.
-- [ ] `AUTH-001`: Add authorization helpers for client-supplied `sessionId`, `resourceId`, `actionId`, and grant IDs as references.
+- [x] `AUTH-001`: Add authorization helpers for client-supplied `sessionId`, `resourceId`, `actionId`, and grant IDs as references.
 - [ ] `AUTH-002`: Add product session or JWT validation adapter.
 - [ ] `AUTH-002`: Define token expiry and refresh behavior for backend command APIs and SSE endpoints.
-- [ ] `AUTH-002`: Return distinct typed errors for unauthorized, expired, and malformed product credentials.
+- [x] `AUTH-002`: Return distinct typed errors for unauthorized, expired, and malformed product credentials.
 - [ ] `AUTH-002`: Add integration tests for product session validation on HTTP command APIs and SSE stream creation.
 - [ ] `AUTH-003`: Add Google OAuth start flow with signed state, nonce, identity binding, redirect target, and expiration.
 - [ ] `AUTH-003`: Add Google OAuth callback flow with state validation and token exchange.
@@ -44,7 +44,7 @@ Sources:
 
 ## Quality And Production Tasks
 
-- [ ] Raise line coverage to at least 95%.
+- [x] Raise line coverage to at least 95%.
 - [ ] Add tenant admin and membership lifecycle support.
 - [ ] Add deployment health checks and operational metrics.
 - [ ] Add deployment-style pipeline tasks for auth route smoke tests, migration checks, IAM policy validation, and rollback notes.
