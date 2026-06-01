@@ -9,7 +9,7 @@ Sources:
 
 ## Completed Bootstrap
 
-- [x] Create dependency-light ESM package for auth domain logic.
+- [x] Initially bootstrap dependency-light ESM auth domain logic; superseded by the completed Python migration in `REPO-002`.
 - [x] `AUTH-001`: Implement server-derived identity helpers that ignore client-supplied `tenantId` and `userId`.
 - [x] `AUTH-001`: Implement tenant, user, and active membership checks.
 - [x] `AUTH-001`: Reject disabled tenants, disabled users, inactive memberships, and cross-tenant references before downstream access.
@@ -18,8 +18,8 @@ Sources:
 - [x] `AUTH-003`: Implement Google OAuth token metadata lifecycle with injected encryption boundary.
 - [x] `AUTH-003`: Keep OAuth token public responses metadata-only.
 - [x] `AUTH-003`: Return reconnect-required errors for expired non-refreshable and revoked Google OAuth tokens.
-- [x] Add unit tests using `node:test`.
-- [x] Document tests and coverage commands in `README.md`.
+- [x] Initially add unit tests using `node:test`; superseded by equivalent Python `unittest` coverage in `REPO-002`.
+- [x] Document current Python test and syntax-check commands in `README.md`.
 - [x] Ignore local prompts, feedback, coverage output, dependencies, and build artifacts.
 
 ## Pending Architecture Tasks
