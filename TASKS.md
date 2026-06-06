@@ -32,6 +32,8 @@ Sources:
 - [ ] `AUTH-002`: Add product session or JWT validation adapter.
 - [ ] `AUTH-002`: Define token expiry and refresh behavior for backend command APIs and SSE endpoints.
 - [x] `AUTH-002`: Return distinct typed errors for unauthorized, expired, and malformed product credentials.
+- [x] `AUTH-002` / M3: Expose server-derived first-run product session status for authenticated, anonymous, expired, malformed, and unauthorized sessions.
+- [x] `AUTH-003` / M3: Expose Google OAuth setup status for disconnected, connected, and reconnect-required states using metadata-only responses.
 - [ ] `AUTH-002`: Add integration tests for product session validation on HTTP command APIs and SSE stream creation.
 - [ ] `AUTH-003`: Add Google OAuth start flow with signed state, nonce, identity binding, redirect target, and expiration.
 - [ ] `AUTH-003`: Add Google OAuth callback flow with state validation and token exchange.
@@ -44,6 +46,7 @@ Sources:
 - [ ] `EVT-001`: Add HTTP route handlers and request/response contract tests for auth and OAuth commands.
 - [ ] `OPS-001`: Ensure auth and OAuth endpoints are covered by MVP edge rate-limit configuration.
 - [ ] `OPS-003`: Add metadata-only audit and log emission for login, OAuth connect, OAuth revoke, and denied access.
+- [x] `OPS-003` / M3: Verify auth setup status responses exclude OAuth token material and ciphertext.
 
 ## Quality And Production Tasks
 

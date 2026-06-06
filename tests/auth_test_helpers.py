@@ -14,6 +14,7 @@ from ai_assist_auth_service import (  # noqa: E402
     TENANT_STATUS,
     USER_STATUS,
     AuthError,
+    AuthSetupStatusService,
     IdentityService,
     InMemoryOAuthTokenRepository,
     InMemoryTenantDirectory,
@@ -33,12 +34,14 @@ class AuthFixture:
         tenant_directory: InMemoryTenantDirectory,
         identity_service: IdentityService,
         oauth_token_service: OAuthTokenService,
+        setup_status_service: AuthSetupStatusService,
         token_protector: FakeTokenProtector,
         token_repository: InMemoryOAuthTokenRepository,
     ) -> None:
         self.tenant_directory = tenant_directory
         self.identity_service = identity_service
         self.oauth_token_service = oauth_token_service
+        self.setup_status_service = setup_status_service
         self.token_protector = token_protector
         self.token_repository = token_repository
 
@@ -79,10 +82,16 @@ def create_auth_fixture(
         token_protector=token_protector,
         clock=lambda: BASE_TIME,
     )
+    setup_status_service = AuthSetupStatusService(
+        identity_service=identity_service,
+        oauth_token_service=oauth_token_service,
+        clock=lambda: BASE_TIME,
+    )
     return AuthFixture(
         tenant_directory=tenant_directory,
         identity_service=identity_service,
         oauth_token_service=oauth_token_service,
+        setup_status_service=setup_status_service,
         token_protector=token_protector,
         token_repository=token_repository,
     )
@@ -94,6 +103,7 @@ def product_session(**overrides: object) -> dict[str, object]:
         "userId": "user-1",
         "authSubject": "auth0|subject-1",
         "audience": "ai-assist",
+        "sessionId": "session-1",
         "expiresAt": SESSION_EXPIRES_AT,
         "requestId": "req-1",
         "correlationId": "corr-1",
