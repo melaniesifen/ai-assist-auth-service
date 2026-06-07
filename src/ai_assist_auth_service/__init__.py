@@ -10,6 +10,7 @@ from .errors import (
 )
 from .identity import AUTH_REFERENCE_TYPES, IdentityService, require_identity
 from .oauth_tokens import (
+    GOOGLE_TOKEN_HANDOFF_OPERATIONS,
     OAUTH_PROVIDERS,
     OAUTH_TOKEN_STATUS,
     InMemoryOAuthTokenRepository,
@@ -33,6 +34,7 @@ __all__ = [
     "AUTH_ERROR_CODES",
     "AUTH_REFERENCE_TYPES",
     "GOOGLE_OAUTH_CONNECTION_STATUSES",
+    "GOOGLE_TOKEN_HANDOFF_OPERATIONS",
     "MEMBERSHIP_STATUS",
     "OAUTH_PROVIDERS",
     "OAUTH_TOKEN_STATUS",

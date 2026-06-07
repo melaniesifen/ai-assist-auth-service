@@ -18,6 +18,10 @@ Sources:
 - [x] `AUTH-003`: Implement Google OAuth token metadata lifecycle with injected encryption boundary.
 - [x] `AUTH-003`: Keep OAuth token public responses metadata-only.
 - [x] `AUTH-003`: Return reconnect-required errors for expired non-refreshable and revoked Google OAuth tokens.
+- [x] `AUTH-003` / M4: Expose internal Google Docs list/read token handoff with status, expiry, scope metadata, and no ciphertext.
+- [x] `AUTH-003` / M4: Return reconnect-required handoff metadata for unavailable, revoked, expired, and insufficient-scope Google tokens.
+- [x] `AUTH-003` / M4: Verify public Google OAuth status/setup responses remain metadata-only with no token, authorization-code, authorization-header, or ciphertext fields.
+- [x] `AUTH-003` / M4: Write fresh review feedback for the auth token handoff diff.
 - [x] Initially add unit tests using `node:test`; superseded by equivalent Python `unittest` coverage in `REPO-002`.
 - [x] Document current Python test and syntax-check commands in `README.md`.
 - [x] Ignore local prompts, feedback, coverage output, dependencies, and build artifacts.

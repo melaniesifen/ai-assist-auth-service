@@ -180,6 +180,9 @@ class AuthSetupStatusServiceTest(unittest.TestCase):
             "refreshToken",
             "accessTokenCiphertext",
             "refreshTokenCiphertext",
+            "authorizationCode",
+            "authorizationHeader",
+            "Authorization:",
             "secret",
             "ciphertext",
         ]:

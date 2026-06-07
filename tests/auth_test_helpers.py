@@ -115,10 +115,17 @@ def product_session(**overrides: object) -> dict[str, object]:
 class FakeTokenProtector:
     def __init__(self) -> None:
         self.calls: list[dict[str, object]] = []
+        self.ciphertexts: dict[str, str] = {}
 
     def encrypt(self, plaintext: str, *, context: dict[str, str]) -> str:
         self.calls.append({"plaintext": plaintext, "context": context})
-        return f"encrypted:{context['purpose']}:{len(plaintext)}"
+        ciphertext = f"encrypted:{context['purpose']}:{len(plaintext)}"
+        self.ciphertexts[ciphertext] = plaintext
+        return ciphertext
+
+    def decrypt(self, ciphertext: str, *, context: dict[str, str]) -> str:
+        self.calls.append({"ciphertext": ciphertext, "context": context})
+        return self.ciphertexts[ciphertext]
 
 
 def assert_auth_error(

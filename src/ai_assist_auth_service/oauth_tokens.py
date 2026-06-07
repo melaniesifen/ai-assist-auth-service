@@ -11,8 +11,15 @@ from .validation import freeze, clone_datetime, require_datetime, require_non_em
 
 OAUTH_PROVIDERS = MappingProxyType({"GOOGLE": "google"})
 OAUTH_TOKEN_STATUS = MappingProxyType({"ACTIVE": "active", "REVOKED": "revoked"})
+GOOGLE_TOKEN_HANDOFF_OPERATIONS = MappingProxyType(
+    {
+        "LIST_RESOURCES": "listResources",
+        "READ_CONTEXT": "readContext",
+    }
+)
 
 _OAUTH_TOKEN_PURPOSE = "oauth-token"
+_GOOGLE_OAUTH_RECONNECT_REQUIRED = "OAUTH_RECONNECT_REQUIRED"
 
 
 class InMemoryOAuthTokenRepository:
@@ -209,6 +216,116 @@ class OAuthTokenService:
             )
         return _token_metadata(record, now)
 
+    def get_google_access_token(
+        self,
+        *,
+        identity: dict[str, Any],
+        google_account_id: str,
+        operation: str,
+        required_scopes: list[Any] | tuple[Any, ...],
+    ) -> dict[str, Any]:
+        require_identity(identity)
+        self.tenant_directory.assert_active_membership(
+            tenant_id=identity["tenantId"], user_id=identity["userId"]
+        )
+        try:
+            require_non_empty_string(google_account_id, "googleAccountId")
+        except TypeError:
+            raise validation_failed("googleAccountId", "Google account ID is required.")
+        if operation not in set(GOOGLE_TOKEN_HANDOFF_OPERATIONS.values()):
+            raise validation_failed("operation", "Google token handoff operation is not supported.")
+        normalized_required_scopes = _normalize_scopes(list(required_scopes))
+        record = self.token_repository.get(
+            tenant_id=identity["tenantId"],
+            user_id=identity["userId"],
+            provider=OAUTH_PROVIDERS["GOOGLE"],
+            google_account_id=google_account_id,
+        )
+        now = self.clock()
+        if record is None:
+            return _reconnect_required_handoff(
+                identity=identity,
+                google_account_id=google_account_id,
+                operation=operation,
+                required_scopes=normalized_required_scopes,
+                reason="unavailable",
+                message="Google OAuth connection is not available.",
+            )
+
+        metadata = _token_metadata(record, now)
+        if record["status"] != OAUTH_TOKEN_STATUS["ACTIVE"] or record["revokedAt"]:
+            return _reconnect_required_handoff(
+                identity=identity,
+                google_account_id=google_account_id,
+                operation=operation,
+                required_scopes=normalized_required_scopes,
+                scopes=list(record["scopes"]),
+                expires_at=record["expiresAt"],
+                reason="revoked",
+                message="Google OAuth connection must be reconnected.",
+            )
+        if metadata["isExpired"]:
+            return _reconnect_required_handoff(
+                identity=identity,
+                google_account_id=google_account_id,
+                operation=operation,
+                required_scopes=normalized_required_scopes,
+                scopes=list(record["scopes"]),
+                expires_at=record["expiresAt"],
+                reason="expired",
+                message="Google OAuth connection has expired.",
+            )
+
+        missing_scopes = [scope for scope in normalized_required_scopes if scope not in record["scopes"]]
+        if missing_scopes:
+            return _reconnect_required_handoff(
+                identity=identity,
+                google_account_id=google_account_id,
+                operation=operation,
+                required_scopes=normalized_required_scopes,
+                scopes=list(record["scopes"]),
+                expires_at=record["expiresAt"],
+                reason="insufficient_scope",
+                message="Google OAuth connection does not include required scopes.",
+                details={"missingScopes": missing_scopes},
+            )
+
+        decrypt = getattr(self.token_protector, "decrypt", None)
+        if not callable(decrypt):
+            raise AuthError(
+                code=AUTH_ERROR_CODES["OAUTH_TOKEN_REVOKED"],
+                message="Google OAuth access token is unavailable.",
+                status=403,
+            )
+        access_token = decrypt(
+            record["accessTokenCiphertext"],
+            context=_encryption_context(identity, OAUTH_PROVIDERS["GOOGLE"]),
+        )
+        if not isinstance(access_token, str) or len(access_token.strip()) == 0:
+            return _reconnect_required_handoff(
+                identity=identity,
+                google_account_id=google_account_id,
+                operation=operation,
+                required_scopes=normalized_required_scopes,
+                scopes=list(record["scopes"]),
+                expires_at=record["expiresAt"],
+                reason="unavailable",
+                message="Google OAuth access token is unavailable.",
+            )
+
+        return freeze({
+            "provider": OAUTH_PROVIDERS["GOOGLE"],
+            "googleAccountId": record["googleAccountId"],
+            "operation": operation,
+            "status": OAUTH_TOKEN_STATUS["ACTIVE"],
+            "accessToken": access_token,
+            "scopes": list(record["scopes"]),
+            "requiredScopes": normalized_required_scopes,
+            "expiresAt": to_iso(record["expiresAt"]),
+            "refreshRequired": False,
+            "reconnectRequired": False,
+        })
+
     def revoke_google(
         self,
         *,
@@ -276,6 +393,43 @@ def _token_metadata(record: dict[str, Any], now: datetime) -> dict[str, Any]:
         "createdAt": to_iso(record["createdAt"]),
         "updatedAt": to_iso(record["updatedAt"]),
         "revokedAt": to_iso(record["revokedAt"]),
+    })
+
+
+def _reconnect_required_handoff(
+    *,
+    identity: dict[str, Any],
+    google_account_id: str,
+    operation: str,
+    required_scopes: list[str],
+    reason: str,
+    message: str,
+    scopes: list[str] | None = None,
+    expires_at: datetime | None = None,
+    details: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return freeze({
+        "provider": OAUTH_PROVIDERS["GOOGLE"],
+        "googleAccountId": google_account_id,
+        "tenantId": identity["tenantId"],
+        "userId": identity["userId"],
+        "operation": operation,
+        "status": "reconnect_required",
+        "scopes": scopes or [],
+        "requiredScopes": required_scopes,
+        "expiresAt": to_iso(expires_at),
+        "refreshRequired": False,
+        "reconnectRequired": True,
+        "error": {
+            "code": _GOOGLE_OAUTH_RECONNECT_REQUIRED,
+            "category": "OAUTH",
+            "message": message,
+            "retryable": False,
+            "httpStatus": 401,
+            "target": "googleOAuth",
+            "reason": reason,
+            "details": details or {},
+        },
     })
 
 
