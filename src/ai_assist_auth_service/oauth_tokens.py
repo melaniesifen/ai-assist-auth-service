@@ -15,6 +15,7 @@ GOOGLE_TOKEN_HANDOFF_OPERATIONS = MappingProxyType(
     {
         "LIST_RESOURCES": "listResources",
         "READ_CONTEXT": "readContext",
+        "APPLY_ACTION": "applyAction",
     }
 )
 
@@ -224,6 +225,60 @@ class OAuthTokenService:
         operation: str,
         required_scopes: list[Any] | tuple[Any, ...],
     ) -> dict[str, Any]:
+        if operation == GOOGLE_TOKEN_HANDOFF_OPERATIONS["APPLY_ACTION"]:
+            raise validation_failed(
+                "operation",
+                "Apply validation must use metadata-only Google token handoff status.",
+            )
+        status = self.get_google_token_handoff_status(
+            identity=identity,
+            google_account_id=google_account_id,
+            operation=operation,
+            required_scopes=required_scopes,
+        )
+        if status["reconnectRequired"]:
+            return status
+
+        record = self.token_repository.get(
+            tenant_id=identity["tenantId"],
+            user_id=identity["userId"],
+            provider=OAUTH_PROVIDERS["GOOGLE"],
+            google_account_id=google_account_id,
+        )
+
+        decrypt = getattr(self.token_protector, "decrypt", None)
+        if not callable(decrypt):
+            raise AuthError(
+                code=AUTH_ERROR_CODES["OAUTH_TOKEN_REVOKED"],
+                message="Google OAuth access token is unavailable.",
+                status=403,
+            )
+        access_token = decrypt(
+            record["accessTokenCiphertext"],
+            context=_encryption_context(identity, OAUTH_PROVIDERS["GOOGLE"]),
+        )
+        if not isinstance(access_token, str) or len(access_token.strip()) == 0:
+            return _reconnect_required_handoff(
+                identity=identity,
+                google_account_id=google_account_id,
+                operation=operation,
+                required_scopes=list(status["requiredScopes"]),
+                scopes=list(record["scopes"]),
+                expires_at=record["expiresAt"],
+                reason="unavailable",
+                message="Google OAuth access token is unavailable.",
+            )
+
+        return freeze({**status, "accessToken": access_token})
+
+    def get_google_token_handoff_status(
+        self,
+        *,
+        identity: dict[str, Any],
+        google_account_id: str,
+        operation: str,
+        required_scopes: list[Any] | tuple[Any, ...],
+    ) -> dict[str, Any]:
         require_identity(identity)
         self.tenant_directory.assert_active_membership(
             tenant_id=identity["tenantId"], user_id=identity["userId"]
@@ -290,35 +345,13 @@ class OAuthTokenService:
                 details={"missingScopes": missing_scopes},
             )
 
-        decrypt = getattr(self.token_protector, "decrypt", None)
-        if not callable(decrypt):
-            raise AuthError(
-                code=AUTH_ERROR_CODES["OAUTH_TOKEN_REVOKED"],
-                message="Google OAuth access token is unavailable.",
-                status=403,
-            )
-        access_token = decrypt(
-            record["accessTokenCiphertext"],
-            context=_encryption_context(identity, OAUTH_PROVIDERS["GOOGLE"]),
-        )
-        if not isinstance(access_token, str) or len(access_token.strip()) == 0:
-            return _reconnect_required_handoff(
-                identity=identity,
-                google_account_id=google_account_id,
-                operation=operation,
-                required_scopes=normalized_required_scopes,
-                scopes=list(record["scopes"]),
-                expires_at=record["expiresAt"],
-                reason="unavailable",
-                message="Google OAuth access token is unavailable.",
-            )
-
         return freeze({
             "provider": OAUTH_PROVIDERS["GOOGLE"],
             "googleAccountId": record["googleAccountId"],
+            "tenantId": identity["tenantId"],
+            "userId": identity["userId"],
             "operation": operation,
             "status": OAUTH_TOKEN_STATUS["ACTIVE"],
-            "accessToken": access_token,
             "scopes": list(record["scopes"]),
             "requiredScopes": normalized_required_scopes,
             "expiresAt": to_iso(record["expiresAt"]),

@@ -22,6 +22,9 @@ Sources:
 - [x] `AUTH-003` / M4: Return reconnect-required handoff metadata for unavailable, revoked, expired, and insufficient-scope Google tokens.
 - [x] `AUTH-003` / M4: Verify public Google OAuth status/setup responses remain metadata-only with no token, authorization-code, authorization-header, or ciphertext fields.
 - [x] `AUTH-003` / M4: Write fresh review feedback for the auth token handoff diff.
+- [x] `AUTH-003` / M7-T4: Expose metadata-only Google token handoff status for apply validation and require reconnect-required results for unavailable, expired, revoked, and insufficient-scope Google tokens.
+- [x] `AUTH-001` / M7-T4: Verify apply-facing session, resource, and action references use server-derived identity and reject missing auth, expired, revoked, malformed, wrong-audience, disabled-user, and cross-tenant references.
+- [x] `AUTH-003` / M7-T4: Verify apply validation status responses do not expose OAuth tokens, authorization codes, authorization headers, ciphertext, or raw document/action payload content.
 - [x] Initially add unit tests using `node:test`; superseded by equivalent Python `unittest` coverage in `REPO-002`.
 - [x] Document current Python test and syntax-check commands in `README.md`.
 - [x] Ignore local prompts, feedback, coverage output, dependencies, and build artifacts.
