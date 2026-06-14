@@ -54,6 +54,10 @@ Sources:
 - [ ] `OPS-001`: Ensure auth and OAuth endpoints are covered by MVP edge rate-limit configuration.
 - [x] `OPS-003` / M8-T2: Add metadata-only audit emission for Google OAuth start, connect, and denied callback states.
 - [x] `OPS-003` / M3: Verify auth setup status responses exclude OAuth token material and ciphertext.
+- [x] `AUTH-002` / M9-T3: Verify deploy-shaped HTTP and SSE product-session authorization derives identity server-side and rejects cross-tenant session/action references.
+- [x] `AUTH-003` / M9-T3: Verify deployed Google OAuth callback config, signed state, replay rejection, wrong-user rejection, encrypted token storage, refresh failure, revoked token, disconnect, and metadata-only status using injected fakes.
+- [x] `AUTH-003` / M9-T3: Add deploy-shaped runtime config validation for generic callback URL, API/SSE/web endpoints, allowed origins, trusted-user mode, and Google OAuth client ID.
+- [x] `OPS-003` / M9-T3: Verify runtime metadata, OAuth audit events, setup status, and handoff responses exclude OAuth tokens, authorization codes, authorization headers, bearer values, and ciphertext.
 
 ## Quality And Production Tasks
 
