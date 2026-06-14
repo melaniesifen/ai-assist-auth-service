@@ -35,6 +35,7 @@ class AuthFixture:
         identity_service: IdentityService,
         oauth_token_service: OAuthTokenService,
         setup_status_service: AuthSetupStatusService,
+        token_exchange: FakeGoogleTokenExchange,
         token_protector: FakeTokenProtector,
         token_repository: InMemoryOAuthTokenRepository,
     ) -> None:
@@ -42,6 +43,7 @@ class AuthFixture:
         self.identity_service = identity_service
         self.oauth_token_service = oauth_token_service
         self.setup_status_service = setup_status_service
+        self.token_exchange = token_exchange
         self.token_protector = token_protector
         self.token_repository = token_repository
 
@@ -71,6 +73,7 @@ def create_auth_fixture(
     )
     token_repository = InMemoryOAuthTokenRepository()
     token_protector = FakeTokenProtector()
+    token_exchange = FakeGoogleTokenExchange()
     identity_service = IdentityService(
         tenant_directory=tenant_directory,
         clock=lambda: BASE_TIME,
@@ -80,6 +83,7 @@ def create_auth_fixture(
         tenant_directory=tenant_directory,
         token_repository=token_repository,
         token_protector=token_protector,
+        token_exchange=token_exchange,
         clock=lambda: BASE_TIME,
     )
     setup_status_service = AuthSetupStatusService(
@@ -92,6 +96,7 @@ def create_auth_fixture(
         identity_service=identity_service,
         oauth_token_service=oauth_token_service,
         setup_status_service=setup_status_service,
+        token_exchange=token_exchange,
         token_protector=token_protector,
         token_repository=token_repository,
     )
@@ -126,6 +131,39 @@ class FakeTokenProtector:
     def decrypt(self, ciphertext: str, *, context: dict[str, str]) -> str:
         self.calls.append({"ciphertext": ciphertext, "context": context})
         return self.ciphertexts[ciphertext]
+
+
+class FakeGoogleTokenExchange:
+    def __init__(self) -> None:
+        self.exchange_response: dict[str, object] = {
+            "googleAccountId": "google-account-1",
+            "scopes": ["https://www.googleapis.com/auth/documents"],
+            "accessToken": "access-token-secret",
+            "refreshToken": "refresh-token-secret",
+            "expiresAt": LATER_TIME,
+        }
+        self.refresh_response: dict[str, object] = {
+            "accessToken": "refreshed-access-token-secret",
+            "expiresAt": LATER_TIME,
+        }
+        self.fail_exchange = False
+        self.fail_refresh = False
+        self.exchange_calls: list[dict[str, object]] = []
+        self.refresh_calls: list[dict[str, object]] = []
+
+    def exchange_code(self, *, authorization_code: str, redirect_uri: str) -> dict[str, object]:
+        self.exchange_calls.append(
+            {"authorizationCode": authorization_code, "redirectUri": redirect_uri}
+        )
+        if self.fail_exchange:
+            raise RuntimeError("exchange failed")
+        return dict(self.exchange_response)
+
+    def refresh(self, *, refresh_token: str, scopes: list[str]) -> dict[str, object]:
+        self.refresh_calls.append({"refreshToken": refresh_token, "scopes": list(scopes)})
+        if self.fail_refresh:
+            raise RuntimeError("refresh failed")
+        return dict(self.refresh_response)
 
 
 def assert_auth_error(

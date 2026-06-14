@@ -36,23 +36,23 @@ Sources:
 - [x] `REPO-002`: Port or replace existing `node:test` coverage with equivalent Python tests and document the Python package layout and local test commands.
 - [x] Migration gate: Do not continue broad new auth-service feature work until the Python migration is completed or explicitly deferred.
 - [x] `AUTH-001`: Add authorization helpers for client-supplied `sessionId`, `resourceId`, `actionId`, and grant IDs as references.
-- [ ] `AUTH-002`: Add product session or JWT validation adapter.
-- [ ] `AUTH-002`: Define token expiry and refresh behavior for backend command APIs and SSE endpoints.
+- [x] `AUTH-002` / M8-T2: Verify product-session validation semantics for HTTP/SSE-facing boundaries through server-derived identity, audience, expiry, revoked-token, malformed-token, active-membership, and reference-authorization tests.
+- [x] `AUTH-002` / M8-T2: Define token expiry and refresh behavior for backend command APIs and SSE endpoints through injected Google token refresh and reconnect-required outcomes.
 - [x] `AUTH-002`: Return distinct typed errors for unauthorized, expired, and malformed product credentials.
 - [x] `AUTH-002` / M3: Expose server-derived first-run product session status for authenticated, anonymous, expired, malformed, and unauthorized sessions.
 - [x] `AUTH-003` / M3: Expose Google OAuth setup status for disconnected, connected, and reconnect-required states using metadata-only responses.
-- [ ] `AUTH-002`: Add integration tests for product session validation on HTTP command APIs and SSE stream creation.
-- [ ] `AUTH-003`: Add Google OAuth start flow with signed state, nonce, identity binding, redirect target, and expiration.
-- [ ] `AUTH-003`: Add Google OAuth callback flow with state validation and token exchange.
-- [ ] `AUTH-003`: Add Google OAuth refresh flow that marks invalid-grant refresh failures revoked.
-- [ ] `AUTH-003`: Add integration tests for OAuth start, callback, refresh, revoke, and reconnect-required paths.
+- [x] `AUTH-002` / M8-T2: Add deterministic boundary tests for product session validation on HTTP/SSE-style setup, command, stream, review, and apply references.
+- [x] `AUTH-003` / M8-T2: Add Google OAuth start flow with signed state, nonce, tenant/user binding, redirect target validation, least-privilege scopes, and expiration.
+- [x] `AUTH-003` / M8-T2: Add Google OAuth callback flow with state validation, single-use nonce consumption, injected code exchange, encrypted token storage, metadata-only response, and safe audit events.
+- [x] `AUTH-003` / M8-T2: Add Google OAuth refresh flow that marks invalid-grant or failed refresh outcomes revoked and reconnect-required.
+- [x] `AUTH-003` / M8-T2: Add deterministic tests for OAuth start, callback, replay, wrong user, expired state, exchange failure, refresh failure, revoke, disconnect, and reconnect-required paths.
 - [ ] `AUTH-003`: Add KMS-backed OAuth token protector adapter.
 - [ ] `AUTH-003`: Add DynamoDB OAuth token repository adapter.
-- [ ] `AUTH-006`: Document and enforce auth-service IAM boundaries for Google OAuth token decrypt paths.
-- [ ] `AUTH-006`: Add failure-mode validation for KMS deny/decrypt failures, expired state, invalid nonce, and revoked Google tokens.
+- [x] `AUTH-006` / M8-T2: Document and enforce auth-service token decrypt boundaries through injected token-protector context and metadata-only public/API responses.
+- [x] `AUTH-006` / M8-T2: Add failure-mode validation for token-protector deny/decrypt failures, expired state, invalid nonce/replay, and revoked Google tokens without requiring cloud KMS.
 - [ ] `EVT-001`: Add HTTP route handlers and request/response contract tests for auth and OAuth commands.
 - [ ] `OPS-001`: Ensure auth and OAuth endpoints are covered by MVP edge rate-limit configuration.
-- [ ] `OPS-003`: Add metadata-only audit and log emission for login, OAuth connect, OAuth revoke, and denied access.
+- [x] `OPS-003` / M8-T2: Add metadata-only audit emission for Google OAuth start, connect, and denied callback states.
 - [x] `OPS-003` / M3: Verify auth setup status responses exclude OAuth token material and ciphertext.
 
 ## Quality And Production Tasks

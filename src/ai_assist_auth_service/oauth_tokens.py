@@ -74,6 +74,7 @@ class OAuthTokenService:
         tenant_directory: Any,
         token_repository: InMemoryOAuthTokenRepository,
         token_protector: Any,
+        token_exchange: Any | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         if tenant_directory is None:
@@ -85,6 +86,7 @@ class OAuthTokenService:
         self.tenant_directory = tenant_directory
         self.token_repository = token_repository
         self.token_protector = token_protector
+        self.token_exchange = token_exchange
         self.clock = clock or (lambda: datetime.now(timezone.utc))
 
     def connect_google(
@@ -246,6 +248,23 @@ class OAuthTokenService:
             google_account_id=google_account_id,
         )
 
+        if record["expiresAt"] <= self.clock() and record["refreshTokenCiphertext"]:
+            record = self.refresh_google_access_token(
+                identity=identity,
+                google_account_id=google_account_id,
+            )
+            if record["status"] != OAUTH_TOKEN_STATUS["ACTIVE"] or record["revokedAt"]:
+                return _reconnect_required_handoff(
+                    identity=identity,
+                    google_account_id=google_account_id,
+                    operation=operation,
+                    required_scopes=list(status["requiredScopes"]),
+                    scopes=list(record["scopes"]),
+                    expires_at=record["expiresAt"],
+                    reason="revoked",
+                    message="Google OAuth connection must be reconnected.",
+                )
+
         decrypt = getattr(self.token_protector, "decrypt", None)
         if not callable(decrypt):
             raise AuthError(
@@ -320,6 +339,20 @@ class OAuthTokenService:
                 message="Google OAuth connection must be reconnected.",
             )
         if metadata["isExpired"]:
+            if record["refreshTokenCiphertext"]:
+                return freeze({
+                    "provider": OAUTH_PROVIDERS["GOOGLE"],
+                    "googleAccountId": record["googleAccountId"],
+                    "tenantId": identity["tenantId"],
+                    "userId": identity["userId"],
+                    "operation": operation,
+                    "status": OAUTH_TOKEN_STATUS["ACTIVE"],
+                    "scopes": list(record["scopes"]),
+                    "requiredScopes": normalized_required_scopes,
+                    "expiresAt": to_iso(record["expiresAt"]),
+                    "refreshRequired": True,
+                    "reconnectRequired": False,
+                })
             return _reconnect_required_handoff(
                 identity=identity,
                 google_account_id=google_account_id,
@@ -359,6 +392,78 @@ class OAuthTokenService:
             "reconnectRequired": False,
         })
 
+    def refresh_google_access_token(
+        self,
+        *,
+        identity: dict[str, Any],
+        google_account_id: str,
+    ) -> dict[str, Any]:
+        require_identity(identity)
+        self.tenant_directory.assert_active_membership(
+            tenant_id=identity["tenantId"], user_id=identity["userId"]
+        )
+        record = self.token_repository.get(
+            tenant_id=identity["tenantId"],
+            user_id=identity["userId"],
+            provider=OAUTH_PROVIDERS["GOOGLE"],
+            google_account_id=google_account_id,
+        )
+        if record is None:
+            raise AuthError(
+                code=AUTH_ERROR_CODES["OAUTH_TOKEN_NOT_FOUND"],
+                message="Google OAuth connection is not available.",
+                status=403,
+            )
+        if record["status"] != OAUTH_TOKEN_STATUS["ACTIVE"] or record["revokedAt"]:
+            raise AuthError(
+                code=AUTH_ERROR_CODES["OAUTH_TOKEN_REVOKED"],
+                message="Google OAuth connection must be reconnected.",
+                status=403,
+            )
+        if not record["refreshTokenCiphertext"]:
+            raise AuthError(
+                code=AUTH_ERROR_CODES["OAUTH_TOKEN_REVOKED"],
+                message="Google OAuth connection has expired and cannot be refreshed.",
+                status=403,
+            )
+        if self.token_exchange is None or not callable(getattr(self.token_exchange, "refresh", None)):
+            raise AuthError(
+                code=AUTH_ERROR_CODES["OAUTH_REFRESH_FAILED"],
+                message="Google OAuth refresh is not configured.",
+                status=503,
+            )
+
+        context = _encryption_context(identity, OAUTH_PROVIDERS["GOOGLE"])
+        try:
+            refresh_token = self.token_protector.decrypt(
+                record["refreshTokenCiphertext"],
+                context=context,
+            )
+            refreshed = self.token_exchange.refresh(refresh_token=refresh_token, scopes=list(record["scopes"]))
+        except Exception:
+            return self._mark_google_reconnect_required(record, reason="refresh_failed")
+
+        if refreshed.get("revoked") or refreshed.get("error") in {"invalid_grant", "revoked"}:
+            return self._mark_google_reconnect_required(record, reason="revoked")
+
+        try:
+            access_token = require_non_empty_string(refreshed.get("accessToken"), "accessToken")
+            expires_at = require_datetime(refreshed.get("expiresAt"), "expiresAt")
+        except (TypeError, ValueError):
+            return self._mark_google_reconnect_required(record, reason="refresh_failed")
+
+        now = self.clock()
+        record["accessTokenCiphertext"] = self.token_protector.encrypt(access_token, context=context)
+        if refreshed.get("refreshToken"):
+            record["refreshTokenCiphertext"] = self.token_protector.encrypt(
+                refreshed["refreshToken"], context=context
+            )
+        record["expiresAt"] = clone_datetime(expires_at)
+        record["updatedAt"] = now
+        record["status"] = OAUTH_TOKEN_STATUS["ACTIVE"]
+        record["revokedAt"] = None
+        return self.token_repository.upsert(record)
+
     def revoke_google(
         self,
         *,
@@ -385,6 +490,23 @@ class OAuthTokenService:
         record["accessTokenCiphertext"] = None
         record["refreshTokenCiphertext"] = None
         return _token_metadata(self.token_repository.upsert(record), self.clock())
+
+    def disconnect_google(
+        self,
+        *,
+        identity: dict[str, Any],
+        google_account_id: str,
+    ) -> dict[str, Any]:
+        return self.revoke_google(identity=identity, google_account_id=google_account_id)
+
+    def _mark_google_reconnect_required(self, record: dict[str, Any], *, reason: str) -> dict[str, Any]:
+        now = self.clock()
+        record["status"] = OAUTH_TOKEN_STATUS["REVOKED"]
+        record["revokedAt"] = now
+        record["updatedAt"] = now
+        record["accessTokenCiphertext"] = None
+        record["refreshTokenCiphertext"] = None
+        return self.token_repository.upsert(record)
 
 
 def _normalize_scopes(scopes: list[Any]) -> list[str]:

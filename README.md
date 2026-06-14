@@ -29,6 +29,7 @@ The service does not own:
 - `src/ai_assist_auth_service/tenancy.py`: in-memory tenant, user, and membership repository with active-member authorization checks.
 - `src/ai_assist_auth_service/identity.py`: product session identity derivation that ignores client-supplied identity fields.
 - `src/ai_assist_auth_service/oauth_tokens.py`: Google OAuth token metadata lifecycle and internal Google Docs token handoff using injected encryption.
+- `src/ai_assist_auth_service/oauth_flow.py`: signed Google OAuth state, start/callback orchestration, replay protection, redirect validation, and injected code exchange.
 - `src/ai_assist_auth_service/__init__.py`: public exports.
 
 ## Security Invariants
@@ -36,6 +37,7 @@ The service does not own:
 - Client-supplied `tenantId` and `userId` are ignored for identity.
 - Tenant membership is checked before token access.
 - OAuth token responses are metadata only.
+- Google OAuth start/callback uses signed state with nonce replay protection and tenant/user binding.
 - Raw OAuth tokens and ciphertext are not returned by public service methods.
 - Internal Google Docs token handoff returns an access token only through the injected token-protector boundary after tenant membership, token status, expiry, and required-scope checks.
 - Encryption context includes `tenantId`, `userId`, `provider`, and `purpose=oauth-token`.
@@ -45,7 +47,7 @@ The service does not own:
 Planned AWS and Google integrations should wrap the existing domain contracts:
 
 - Product session or JWT validation adapter.
-- OAuth state signing and Google token exchange adapter.
+- Google token exchange and refresh adapter.
 - KMS token protector implementing `encrypt(plaintext, { context })`.
 - DynamoDB token repository implementing the same repository shape as `InMemoryOAuthTokenRepository`.
 - HTTP handlers for `/auth/session`, `/oauth/google/start`, `/oauth/google/callback`, `/oauth/google/status`, and `/oauth/google/connection`.

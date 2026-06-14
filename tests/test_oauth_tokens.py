@@ -257,7 +257,7 @@ class OAuthTokenServiceTest(unittest.TestCase):
         fixture = create_auth_fixture()
         identity = fixture.identity_service.derive_identity(product_session=product_session())
 
-        handoff = fixture.oauth_token_service.get_google_access_token(
+        handoff = fixture.oauth_token_service.get_google_token_handoff_status(
             identity=identity,
             google_account_id="missing-account",
             operation=GOOGLE_TOKEN_HANDOFF_OPERATIONS["LIST_RESOURCES"],
@@ -267,7 +267,31 @@ class OAuthTokenServiceTest(unittest.TestCase):
         self.assert_reconnect_handoff(handoff, reason="unavailable")
         self.assertNotIn("accessToken", handoff)
 
-    def test_google_token_handoff_returns_reconnect_required_for_expired_tokens(self) -> None:
+    def test_google_token_handoff_marks_expired_refreshable_tokens_refresh_required(self) -> None:
+        fixture = create_auth_fixture()
+        identity = fixture.identity_service.derive_identity(product_session=product_session())
+        fixture.oauth_token_service.connect_google(
+            identity=identity,
+            google_account_id="google-account-1",
+            scopes=["https://www.googleapis.com/auth/documents.readonly"],
+            access_token="access-token-secret",
+            refresh_token="refresh-token-secret",
+            expires_at=datetime(2026, 5, 29, 11, 59, 59, tzinfo=timezone.utc),
+        )
+
+        handoff = fixture.oauth_token_service.get_google_token_handoff_status(
+            identity=identity,
+            google_account_id="google-account-1",
+            operation=GOOGLE_TOKEN_HANDOFF_OPERATIONS["READ_CONTEXT"],
+            required_scopes=["https://www.googleapis.com/auth/documents.readonly"],
+        )
+
+        self.assertEqual(handoff["status"], "active")
+        self.assertTrue(handoff["refreshRequired"])
+        self.assertFalse(handoff["reconnectRequired"])
+        self.assertNotIn("accessToken", handoff)
+
+    def test_internal_google_token_handoff_refreshes_expired_access_token(self) -> None:
         fixture = create_auth_fixture()
         identity = fixture.identity_service.derive_identity(product_session=product_session())
         fixture.oauth_token_service.connect_google(
@@ -286,8 +310,140 @@ class OAuthTokenServiceTest(unittest.TestCase):
             required_scopes=["https://www.googleapis.com/auth/documents.readonly"],
         )
 
-        self.assert_reconnect_handoff(handoff, reason="expired")
+        self.assertEqual(handoff["status"], "active")
+        self.assertEqual(handoff["accessToken"], "refreshed-access-token-secret")
+        self.assertEqual(
+            fixture.token_exchange.refresh_calls,
+            [
+                {
+                    "refreshToken": "refresh-token-secret",
+                    "scopes": ["https://www.googleapis.com/auth/documents.readonly"],
+                }
+            ],
+        )
+
+    def test_refresh_failure_marks_google_connection_reconnect_required(self) -> None:
+        fixture = create_auth_fixture()
+        fixture.token_exchange.fail_refresh = True
+        identity = fixture.identity_service.derive_identity(product_session=product_session())
+        fixture.oauth_token_service.connect_google(
+            identity=identity,
+            google_account_id="google-account-1",
+            scopes=["https://www.googleapis.com/auth/documents.readonly"],
+            access_token="access-token-secret",
+            refresh_token="refresh-token-secret",
+            expires_at=datetime(2026, 5, 29, 11, 59, 59, tzinfo=timezone.utc),
+        )
+
+        refreshed = fixture.oauth_token_service.refresh_google_access_token(
+            identity=identity,
+            google_account_id="google-account-1",
+        )
+
+        self.assertEqual(refreshed["status"], "revoked")
+        self.assertIsNone(refreshed["accessTokenCiphertext"])
+        self.assertIsNone(refreshed["refreshTokenCiphertext"])
+        status = fixture.oauth_token_service.get_google_token_handoff_status(
+            identity=identity,
+            google_account_id="google-account-1",
+            operation=GOOGLE_TOKEN_HANDOFF_OPERATIONS["READ_CONTEXT"],
+            required_scopes=["https://www.googleapis.com/auth/documents.readonly"],
+        )
+        self.assert_reconnect_handoff(status, reason="revoked")
+
+    def test_internal_google_token_handoff_returns_reconnect_when_refresh_fails(self) -> None:
+        fixture = create_auth_fixture()
+        fixture.token_exchange.fail_refresh = True
+        identity = fixture.identity_service.derive_identity(product_session=product_session())
+        fixture.oauth_token_service.connect_google(
+            identity=identity,
+            google_account_id="google-account-1",
+            scopes=["https://www.googleapis.com/auth/documents.readonly"],
+            access_token="access-token-secret",
+            refresh_token="refresh-token-secret",
+            expires_at=datetime(2026, 5, 29, 11, 59, 59, tzinfo=timezone.utc),
+        )
+
+        handoff = fixture.oauth_token_service.get_google_access_token(
+            identity=identity,
+            google_account_id="google-account-1",
+            operation=GOOGLE_TOKEN_HANDOFF_OPERATIONS["READ_CONTEXT"],
+            required_scopes=["https://www.googleapis.com/auth/documents.readonly"],
+        )
+
+        self.assert_reconnect_handoff(handoff, reason="revoked")
         self.assertNotIn("accessToken", handoff)
+
+    def test_revoked_refresh_response_marks_google_connection_reconnect_required(self) -> None:
+        fixture = create_auth_fixture()
+        fixture.token_exchange.refresh_response = {"error": "invalid_grant", "revoked": True}
+        identity = fixture.identity_service.derive_identity(product_session=product_session())
+        fixture.oauth_token_service.connect_google(
+            identity=identity,
+            google_account_id="google-account-1",
+            scopes=["https://www.googleapis.com/auth/documents.readonly"],
+            access_token="access-token-secret",
+            refresh_token="refresh-token-secret",
+            expires_at=datetime(2026, 5, 29, 11, 59, 59, tzinfo=timezone.utc),
+        )
+
+        refreshed = fixture.oauth_token_service.refresh_google_access_token(
+            identity=identity,
+            google_account_id="google-account-1",
+        )
+
+        self.assertEqual(refreshed["status"], "revoked")
+        self.assertIsNone(refreshed["accessTokenCiphertext"])
+
+    def test_token_protector_decrypt_failure_during_refresh_fails_closed(self) -> None:
+        fixture = create_auth_fixture()
+        identity = fixture.identity_service.derive_identity(product_session=product_session())
+        fixture.oauth_token_service.connect_google(
+            identity=identity,
+            google_account_id="google-account-1",
+            scopes=["https://www.googleapis.com/auth/documents.readonly"],
+            access_token="access-token-secret",
+            refresh_token="refresh-token-secret",
+            expires_at=datetime(2026, 5, 29, 11, 59, 59, tzinfo=timezone.utc),
+        )
+        fixture.token_protector.ciphertexts.clear()
+
+        refreshed = fixture.oauth_token_service.refresh_google_access_token(
+            identity=identity,
+            google_account_id="google-account-1",
+        )
+
+        self.assertEqual(refreshed["status"], "revoked")
+        self.assertIsNone(refreshed["accessTokenCiphertext"])
+        self.assertEqual(fixture.token_exchange.refresh_calls, [])
+
+    def test_disconnect_google_revokes_and_clears_token_material(self) -> None:
+        fixture = create_auth_fixture()
+        identity = fixture.identity_service.derive_identity(product_session=product_session())
+        fixture.oauth_token_service.connect_google(
+            identity=identity,
+            google_account_id="google-account-1",
+            scopes=["https://www.googleapis.com/auth/documents.readonly"],
+            access_token="access-token-secret",
+            refresh_token="refresh-token-secret",
+            expires_at=LATER_TIME,
+        )
+
+        disconnected = fixture.oauth_token_service.disconnect_google(
+            identity=identity,
+            google_account_id="google-account-1",
+        )
+
+        self.assertEqual(disconnected["status"], "revoked")
+        self.assertTrue(disconnected["reconnectRequired"])
+        stored = fixture.token_repository.get(
+            tenant_id="tenant-1",
+            user_id="user-1",
+            provider="google",
+            google_account_id="google-account-1",
+        )
+        self.assertIsNone(stored["accessTokenCiphertext"])
+        self.assertIsNone(stored["refreshTokenCiphertext"])
 
     def test_google_token_handoff_returns_reconnect_required_for_revoked_tokens(self) -> None:
         fixture = create_auth_fixture()
