@@ -3,6 +3,9 @@ name = "ai-assist-auth-service"
 version = "0.1.0"
 description = "Domain-layer bootstrap for AI Assist product auth, tenancy, and OAuth token metadata."
 requires-python = ">=3.11"
+dependencies = [
+  "boto3>=1.34,<2",
+]
 
 [tool.unittest]
 start-dir = "tests"

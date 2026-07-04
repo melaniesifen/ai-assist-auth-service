@@ -46,18 +46,21 @@ Sources:
 - [x] `AUTH-003` / M8-T2: Add Google OAuth callback flow with state validation, single-use nonce consumption, injected code exchange, encrypted token storage, metadata-only response, and safe audit events.
 - [x] `AUTH-003` / M8-T2: Add Google OAuth refresh flow that marks invalid-grant or failed refresh outcomes revoked and reconnect-required.
 - [x] `AUTH-003` / M8-T2: Add deterministic tests for OAuth start, callback, replay, wrong user, expired state, exchange failure, refresh failure, revoke, disconnect, and reconnect-required paths.
-- [ ] `AUTH-003`: Add KMS-backed OAuth token protector adapter.
-- [ ] `AUTH-003`: Add DynamoDB OAuth token repository adapter.
+- [x] `AUTH-003`: Add KMS-backed OAuth token protector adapter.
+- [x] `AUTH-003`: Add DynamoDB OAuth token repository adapter.
 - [x] `AUTH-006` / M8-T2: Document and enforce auth-service token decrypt boundaries through injected token-protector context and metadata-only public/API responses.
 - [x] `AUTH-006` / M8-T2: Add failure-mode validation for token-protector deny/decrypt failures, expired state, invalid nonce/replay, and revoked Google tokens without requiring cloud KMS.
-- [ ] `EVT-001`: Add HTTP route handlers and request/response contract tests for auth and OAuth commands.
-- [ ] `OPS-001`: Ensure auth and OAuth endpoints are covered by MVP edge rate-limit configuration.
+- [x] `EVT-001`: Add HTTP route handlers and request/response contract tests for auth and OAuth commands.
+- [x] `OPS-001`: Ensure auth and OAuth endpoints are covered by MVP edge rate-limit configuration.
 - [x] `OPS-003` / M8-T2: Add metadata-only audit emission for Google OAuth start, connect, and denied callback states.
 - [x] `OPS-003` / M3: Verify auth setup status responses exclude OAuth token material and ciphertext.
 - [x] `AUTH-002` / M9-T3: Verify deploy-shaped HTTP and SSE product-session authorization derives identity server-side and rejects cross-tenant session/action references.
 - [x] `AUTH-003` / M9-T3: Verify deployed Google OAuth callback config, signed state, replay rejection, wrong-user rejection, encrypted token storage, refresh failure, revoked token, disconnect, and metadata-only status using injected fakes.
 - [x] `AUTH-003` / M9-T3: Add deploy-shaped runtime config validation for generic callback URL, API/SSE/web endpoints, allowed origins, trusted-user mode, and Google OAuth client ID.
 - [x] `OPS-003` / M9-T3: Verify runtime metadata, OAuth audit events, setup status, and handoff responses exclude OAuth tokens, authorization codes, authorization headers, bearer values, and ciphertext.
+- [x] `AUTH-002` / M9-T9: Add canonical deployed auth HTTP handlers for trusted-user login, logout, session status, server-derived tenant/user identity, expired or revoked session status, and metadata-only errors.
+- [x] `AUTH-003` / M9-T9: Add canonical Google OAuth HTTP handlers for start, callback, status, and disconnect with signed-state replay rejection, tenant/user binding, deployed callback URL validation, and metadata-only responses.
+- [x] `AUTH-003` / M9-T9: Add deploy adapters for Google token exchange/refresh, Secrets Manager OAuth client secret loading, KMS token encryption/decryption, and DynamoDB OAuth token persistence.
 
 ## Quality And Production Tasks
 

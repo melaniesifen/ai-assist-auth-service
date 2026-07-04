@@ -1,8 +1,11 @@
 # ai-assist-auth-service
 
-Python domain layer for product identity, tenant membership, and Google OAuth token metadata.
+Python service for product identity, tenant membership, Google OAuth, and OAuth
+token persistence.
 
-This repo intentionally has no runtime dependencies and no AWS or Google network integration yet. The current code uses only the Python standard library for deterministic `unittest` coverage and future adapters.
+The domain code remains dependency-light and deterministic for unit tests. The
+deployed runtime includes a small HTTP adapter plus lazy AWS/Google adapters for
+KMS, DynamoDB, Secrets Manager, and Google OAuth token exchange.
 
 ## Current Boundary
 
@@ -13,6 +16,13 @@ The service owns:
 - Typed authentication and authorization errors.
 - Google OAuth token metadata lifecycle.
 - Coordination with an injected token protector for encryption.
+- Canonical HTTP handlers for `/auth/session`, `/oauth/google/start`,
+  `/oauth/google/callback`, `/oauth/google/status`, and
+  `/oauth/google/connection`.
+- Trusted-user bootstrap login/logout when the deployment explicitly configures
+  trusted-user bootstrap and product-session signing secrets.
+- KMS-backed OAuth token encryption and DynamoDB token persistence through
+  adapters that match the injected domain repository/protector contracts.
 
 The service does not own:
 
@@ -20,8 +30,8 @@ The service does not own:
 - Model provider calls.
 - Google Docs API calls.
 - Prompt construction.
-- HTTP routing.
-- KMS, DynamoDB, or real OAuth exchange calls.
+- API Gateway edge auth.
+- Google Docs API calls.
 
 ## Domain Modules
 
@@ -30,6 +40,14 @@ The service does not own:
 - `src/ai_assist_auth_service/identity.py`: product session identity derivation that ignores client-supplied identity fields.
 - `src/ai_assist_auth_service/oauth_tokens.py`: Google OAuth token metadata lifecycle and internal Google Docs token handoff using injected encryption.
 - `src/ai_assist_auth_service/oauth_flow.py`: signed Google OAuth state, start/callback orchestration, replay protection, redirect validation, and injected code exchange.
+- `src/ai_assist_auth_service/http_app.py`: canonical auth/OAuth HTTP route
+  handlers for deployed service containers.
+- `src/ai_assist_auth_service/product_session.py`: server-signed trusted-user
+  product-session issuing, verification, and process-local logout revocation.
+- `src/ai_assist_auth_service/aws_adapters.py`: KMS token protector, DynamoDB
+  OAuth token repository, and Secrets Manager secret resolver.
+- `src/ai_assist_auth_service/google_oauth_adapter.py`: Google OAuth
+  code-exchange and refresh adapter.
 - `src/ai_assist_auth_service/runtime.py`: deploy-shaped runtime config validation and HTTP/SSE route authorization helpers with injected services.
 - `src/ai_assist_auth_service/__init__.py`: public exports.
 
@@ -45,15 +63,26 @@ The service does not own:
 - Internal Google Docs token handoff returns an access token only through the injected token-protector boundary after tenant membership, token status, expiry, and required-scope checks.
 - Encryption context includes `tenantId`, `userId`, `provider`, and `purpose=oauth-token`.
 
-## Future Adapters
+## Deployed Runtime Config
 
-Planned AWS and Google integrations should wrap the existing domain contracts:
+The deployed auth service expects the generic M9 runtime keys plus:
 
-- Product session or JWT validation adapter.
-- Google token exchange and refresh adapter.
-- KMS token protector implementing `encrypt(plaintext, { context })`.
-- DynamoDB token repository implementing the same repository shape as `InMemoryOAuthTokenRepository`.
-- HTTP handlers for `/auth/session`, `/oauth/google/start`, `/oauth/google/callback`, `/oauth/google/status`, and `/oauth/google/connection`.
+- `PRODUCT_AUTH_AUDIENCE`
+- `PRODUCT_AUTH_HMAC_SECRET`
+- `PRODUCT_SESSION_TTL_HOURS`
+- `OAUTH_STATE_SIGNING_SECRET`
+- `TRUSTED_USER_TENANT_ID`
+- `TRUSTED_USER_USER_ID`
+- `TRUSTED_USER_AUTH_SUBJECT`
+- `TRUSTED_USER_BOOTSTRAP_SECRET`
+- `GOOGLE_OAUTH_CLIENT_SECRET_REF`
+- `APP_KMS_KEY_ID`
+- `OAUTH_TOKEN_TABLE_NAME`
+
+Secret values must come from deployment-time secret management or ignored local
+configuration. Do not commit plaintext secrets. OAuth client secret refs point
+to Secrets Manager; token ciphertext is stored in DynamoDB and encrypted with
+the shared app KMS key.
 
 ## Task Breakdown
 
@@ -66,7 +95,9 @@ Implementation tasks are tracked in [TASKS.md](TASKS.md). Update the checkboxes 
 - Tests: `tests/`.
 - Metadata: `pyproject.toml`.
 
-No virtual environment is required for the current stdlib-only tests. If future work adds third-party dependencies, declare them in repo-local tooling files before relying on them.
+No virtual environment is required for the current unit tests because AWS and
+Google adapters are lazy. The deployed container installs repo-local
+dependencies from `pyproject.toml`.
 
 ## Testing
 

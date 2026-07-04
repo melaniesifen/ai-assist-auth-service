@@ -48,6 +48,9 @@ class AuthRuntimeConfigTest(unittest.TestCase):
                 sse_base_url="https://sse.example.com",
                 google_oauth_client_id="google-client-1",
                 google_oauth_callback_url="https://api.example.com/oauth/google/callback",
+                google_oauth_client_secret_ref="arn:aws:secretsmanager:secret:google",
+                app_kms_key_id="arn:aws:kms:key/app",
+                oauth_token_table_name="OAuthTokens",
             ),
             AUTH_ERROR_CODES["VALIDATION_FAILED"],
             400,
@@ -64,6 +67,9 @@ class AuthRuntimeConfigTest(unittest.TestCase):
                 sse_base_url="https://sse.example.com",
                 google_oauth_client_id="google-client-1",
                 google_oauth_callback_url="https://api.example.com/oauth/google/callback",
+                google_oauth_client_secret_ref="arn:aws:secretsmanager:secret:google",
+                app_kms_key_id="arn:aws:kms:key/app",
+                oauth_token_table_name="OAuthTokens",
             ),
             AUTH_ERROR_CODES["VALIDATION_FAILED"],
             400,
@@ -221,7 +227,10 @@ def runtime_env(**overrides: str) -> dict[str, str]:
         "API_BASE_URL": "https://api.example.com",
         "SSE_BASE_URL": "https://sse.example.com",
         "GOOGLE_OAUTH_CLIENT_ID": "google-client-1",
+        "GOOGLE_OAUTH_CLIENT_SECRET_REF": "arn:aws:secretsmanager:us-west-2:123456789012:secret:google-oauth",
         "GOOGLE_OAUTH_CALLBACK_URL": "https://api.example.com/oauth/google/callback",
+        "APP_KMS_KEY_ID": "arn:aws:kms:us-west-2:123456789012:key/app",
+        "OAUTH_TOKEN_TABLE_NAME": "OAuthTokens",
     }
     env.update(overrides)
     return env

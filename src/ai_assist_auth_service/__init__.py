@@ -24,6 +24,7 @@ from .oauth_flow import (
     SignedOAuthStateCodec,
 )
 from .runtime import AUTH_RUNTIME_CONFIG_KEYS, AuthRouteAuthorizer, AuthRuntimeConfig
+from .product_session import HmacProductSessionCodec, InMemorySessionRevocationRepository
 from .setup_status import (
     GOOGLE_OAUTH_CONNECTION_STATUSES,
     PRODUCT_SESSION_STATUSES,
@@ -59,9 +60,11 @@ __all__ = [
     "AuthRuntimeConfig",
     "AuthSetupStatusService",
     "GoogleOAuthFlowService",
+    "HmacProductSessionCodec",
     "IdentityService",
     "InMemoryOAuthTokenRepository",
     "InMemoryOAuthStateRepository",
+    "InMemorySessionRevocationRepository",
     "InMemoryTenantDirectory",
     "OAuthTokenService",
     "SignedOAuthStateCodec",

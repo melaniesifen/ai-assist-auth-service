@@ -19,7 +19,10 @@ AUTH_RUNTIME_CONFIG_KEYS = MappingProxyType(
         "API_BASE_URL": "API_BASE_URL",
         "SSE_BASE_URL": "SSE_BASE_URL",
         "GOOGLE_OAUTH_CLIENT_ID": "GOOGLE_OAUTH_CLIENT_ID",
+        "GOOGLE_OAUTH_CLIENT_SECRET_REF": "GOOGLE_OAUTH_CLIENT_SECRET_REF",
         "GOOGLE_OAUTH_CALLBACK_URL": "GOOGLE_OAUTH_CALLBACK_URL",
+        "APP_KMS_KEY_ID": "APP_KMS_KEY_ID",
+        "OAUTH_TOKEN_TABLE_NAME": "OAUTH_TOKEN_TABLE_NAME",
     }
 )
 
@@ -39,6 +42,9 @@ class AuthRuntimeConfig:
         sse_base_url: str,
         google_oauth_client_id: str,
         google_oauth_callback_url: str,
+        google_oauth_client_secret_ref: str,
+        app_kms_key_id: str,
+        oauth_token_table_name: str,
     ) -> None:
         self.app_env = require_non_empty_string(app_env, "APP_ENV")
         self.aws_region = require_non_empty_string(aws_region, "AWS_REGION")
@@ -60,6 +66,9 @@ class AuthRuntimeConfig:
         self.google_oauth_client_id = require_non_empty_string(
             google_oauth_client_id, "GOOGLE_OAUTH_CLIENT_ID"
         )
+        self.google_oauth_client_secret_ref = require_non_empty_string(
+            google_oauth_client_secret_ref, "GOOGLE_OAUTH_CLIENT_SECRET_REF"
+        )
         self.google_oauth_callback_url = _validate_url(
             google_oauth_callback_url,
             field="GOOGLE_OAUTH_CALLBACK_URL",
@@ -70,6 +79,10 @@ class AuthRuntimeConfig:
                 "GOOGLE_OAUTH_CALLBACK_URL",
                 "Google OAuth callback URL must match the deployed API callback route.",
             )
+        self.app_kms_key_id = require_non_empty_string(app_kms_key_id, "APP_KMS_KEY_ID")
+        self.oauth_token_table_name = require_non_empty_string(
+            oauth_token_table_name, "OAUTH_TOKEN_TABLE_NAME"
+        )
 
     @classmethod
     def from_mapping(cls, values: Mapping[str, Any]) -> "AuthRuntimeConfig":
@@ -82,7 +95,12 @@ class AuthRuntimeConfig:
             api_base_url=_required_config(values, "API_BASE_URL"),
             sse_base_url=_required_config(values, "SSE_BASE_URL"),
             google_oauth_client_id=_required_config(values, "GOOGLE_OAUTH_CLIENT_ID"),
+            google_oauth_client_secret_ref=_required_config(
+                values, "GOOGLE_OAUTH_CLIENT_SECRET_REF"
+            ),
             google_oauth_callback_url=_required_config(values, "GOOGLE_OAUTH_CALLBACK_URL"),
+            app_kms_key_id=_required_config(values, "APP_KMS_KEY_ID"),
+            oauth_token_table_name=_required_config(values, "OAUTH_TOKEN_TABLE_NAME"),
         )
 
     @property
@@ -109,6 +127,7 @@ class AuthRuntimeConfig:
                 "sseBaseUrl": self.sse_base_url,
                 "googleOAuthCallbackUrl": self.google_oauth_callback_url,
                 "allowedOrigins": self.allowed_origins,
+                "oauthTokenTableName": self.oauth_token_table_name,
             }
         )
 

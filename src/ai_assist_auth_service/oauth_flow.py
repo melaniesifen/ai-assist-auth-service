@@ -134,6 +134,7 @@ class GoogleOAuthFlowService:
             "nonce": nonce,
             "tenantId": identity["tenantId"],
             "userId": identity["userId"],
+            "authSubject": identity["authSubject"],
             "redirectTarget": redirect_target,
             "expiresAt": to_iso(expires_at),
         }
