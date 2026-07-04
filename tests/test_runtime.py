@@ -131,6 +131,29 @@ class AuthRuntimeConfigTest(unittest.TestCase):
         )
         self.assert_metadata_only(connected)
 
+    def test_oauth_start_allows_extension_redirect_target_trailing_slash(self) -> None:
+        fixture = create_auth_fixture()
+        flow = GoogleOAuthFlowService(
+            oauth_token_service=fixture.oauth_token_service,
+            state_repository=InMemoryOAuthStateRepository(),
+            state_codec=SignedOAuthStateCodec(signing_secret="state-signing-secret"),
+            token_exchange=fixture.token_exchange,
+            client_id="google-client-id",
+            redirect_uri="https://api.example.com/oauth/google/callback",
+            allowed_redirect_targets=["https://extension-id.extensions.allizom.org"],
+            nonce_factory=lambda: "nonce-extension",
+        )
+        identity = fixture.identity_service.derive_identity(product_session=product_session())
+
+        start = flow.start_google_oauth(
+            identity=identity,
+            redirect_target="https://extension-id.extensions.allizom.org/",
+        )
+
+        self.assertIn("https://accounts.google.com/o/oauth2/v2/auth", start["authorizationUrl"])
+        self.assertEqual(start["redirectTarget"], "https://extension-id.extensions.allizom.org/")
+        self.assert_metadata_only(start)
+
     def assert_metadata_only(self, payload: object) -> None:
         serialized = json.dumps(payload).lower()
         for disallowed in [

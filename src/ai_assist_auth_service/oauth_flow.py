@@ -237,7 +237,9 @@ class GoogleOAuthFlowService:
 
     def _validated_redirect_target(self, redirect_target: str) -> str:
         target = require_non_empty_string(redirect_target, "redirectTarget")
-        if target not in self.allowed_redirect_targets:
+        if _normalize_redirect_target(target) not in {
+            _normalize_redirect_target(allowed) for allowed in self.allowed_redirect_targets
+        }:
             raise validation_failed("redirectTarget", "OAuth redirect target is not allowed.")
         return target
 
@@ -268,6 +270,10 @@ def _normalize_scopes(scopes: list[str] | tuple[str, ...]) -> tuple[str, ...]:
     if len(normalized) == 0:
         raise validation_failed("scopes", "At least one OAuth scope is required.")
     return normalized
+
+
+def _normalize_redirect_target(value: str) -> str:
+    return require_non_empty_string(value, "redirectTarget").rstrip("/")
 
 
 def _urlsafe_json(payload: dict[str, Any]) -> str:
