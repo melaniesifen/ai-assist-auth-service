@@ -16,6 +16,7 @@ from .allowed_users import (
     DEFAULT_ALLOWED_USERS_ENV,
     AllowedProductUserDirectory,
     TrustedEdgeJwtSessionMapper,
+    unverified_jwt_claims,
 )
 from .errors import AUTH_ERROR_CODES, AuthError, authentication_required, validation_failed
 from .google_oauth_adapter import GoogleOAuthHttpTokenExchange
@@ -201,8 +202,19 @@ class AuthHttpApplication:
         )
 
     def _product_session(self, headers: dict[str, str]) -> dict[str, Any]:
-        if headers.get("x-ai-assist-auth-subject") and self.trusted_edge_jwt_sessions is not None:
-            product_session = self.trusted_edge_jwt_sessions.product_session_from_headers(headers)
+        if self.trusted_edge_jwt_sessions is not None and _looks_like_bearer_jwt(headers.get("authorization")):
+            claims = unverified_jwt_claims(_bearer_token(headers))
+            edge_headers = headers if _is_cognito_claim_shape(claims) else None
+            if edge_headers is not None and not edge_headers.get("x-ai-assist-auth-subject"):
+                edge_headers = {
+                    **headers,
+                    "x-ai-assist-auth-subject": require_non_empty_string(claims.get("sub"), "sub"),
+                }
+            product_session = (
+                self.trusted_edge_jwt_sessions.product_session_from_headers(edge_headers)
+                if edge_headers is not None
+                else self.product_session_codec.verify_bearer(headers.get("authorization"))
+            )
         else:
             product_session = self.product_session_codec.verify_bearer(headers.get("authorization"))
         product_session["requestId"] = headers.get("x-request-id") or product_session.get("requestId")
@@ -362,6 +374,16 @@ def _bearer_token(headers: dict[str, str]) -> str:
     if not authorization or not authorization.startswith("Bearer "):
         raise authentication_required("Bearer product session token is required.")
     return authorization[len("Bearer ") :].strip()
+
+
+def _looks_like_bearer_jwt(authorization: str | None) -> bool:
+    if not authorization or not authorization.startswith("Bearer "):
+        return False
+    return authorization[len("Bearer ") :].strip().count(".") == 2
+
+
+def _is_cognito_claim_shape(claims: dict[str, Any]) -> bool:
+    return bool(claims.get("sub") and claims.get("iss") and claims.get("aud") and claims.get("exp"))
 
 
 def _first(query: dict[str, list[str]], name: str) -> str | None:

@@ -147,6 +147,19 @@ class AuthHttpApplicationTest(unittest.TestCase):
         self.assertFalse(user_b_status["connected"])
         self.assertEqual(user_b_status["accounts"], [])
 
+    def test_cognito_bearer_maps_to_allowed_user_without_forwarded_subject_header(self) -> None:
+        app = self.create_app()
+        headers = self.cognito_headers("cognito-subject-a")
+        headers.pop("X-Ai-Assist-Auth-Subject")
+
+        response = app.handle(method="GET", path="/oauth/google/status", headers=headers)
+        status = self.decode(response)
+
+        self.assertEqual(response["status"], 200)
+        self.assertFalse(status["connected"])
+        self.assertEqual(status["accounts"], [])
+        self.assert_metadata_only(status)
+
     def test_cognito_user_b_cannot_disconnect_or_handoff_user_a_google_token(self) -> None:
         app = self.create_app()
         user_a_headers = self.cognito_headers("cognito-subject-a")
