@@ -25,6 +25,7 @@ from .oauth_flow import (
 )
 from .runtime import AUTH_RUNTIME_CONFIG_KEYS, AuthRouteAuthorizer, AuthRuntimeConfig
 from .product_session import HmacProductSessionCodec, InMemorySessionRevocationRepository
+from .allowed_users import AllowedProductUserDirectory, TrustedEdgeJwtSessionMapper, unverified_jwt_claims
 from .setup_status import (
     GOOGLE_OAUTH_CONNECTION_STATUSES,
     PRODUCT_SESSION_STATUSES,
@@ -59,6 +60,7 @@ __all__ = [
     "AuthRouteAuthorizer",
     "AuthRuntimeConfig",
     "AuthSetupStatusService",
+    "AllowedProductUserDirectory",
     "GoogleOAuthFlowService",
     "HmacProductSessionCodec",
     "IdentityService",
@@ -68,11 +70,13 @@ __all__ = [
     "InMemoryTenantDirectory",
     "OAuthTokenService",
     "SignedOAuthStateCodec",
+    "TrustedEdgeJwtSessionMapper",
     "authentication_required",
     "expired_auth_token",
     "forbidden",
     "invalid_auth_token",
     "malformed_auth_token",
     "require_identity",
+    "unverified_jwt_claims",
     "validation_failed",
 ]

@@ -11,7 +11,9 @@ KMS, DynamoDB, Secrets Manager, and Google OAuth token exchange.
 
 The service owns:
 
-- Server-derived `tenantId`, `userId`, and `authSubject` from a trusted product session.
+- Server-derived `tenantId`, `userId`, and `authSubject` from a trusted product
+  session or an API Gateway-verified Cognito/OIDC subject mapped through the
+  allowed-user directory.
 - Tenant, user, and membership checks.
 - Typed authentication and authorization errors.
 - Google OAuth token metadata lifecycle.
@@ -20,7 +22,9 @@ The service owns:
   `/oauth/google/callback`, `/oauth/google/status`, and
   `/oauth/google/connection`.
 - Trusted-user bootstrap login/logout when the deployment explicitly configures
-  trusted-user bootstrap and product-session signing secrets.
+  trusted-user bootstrap and product-session signing secrets. For M11
+  multi-user dogfood, this is a legacy/local bootstrap path; product routes use
+  Cognito/OIDC JWT edge auth plus server-side allowed-user mapping.
 - KMS-backed OAuth token encryption and DynamoDB token persistence through
   adapters that match the injected domain repository/protector contracts.
 
@@ -44,6 +48,9 @@ The service does not own:
   handlers for deployed service containers.
 - `src/ai_assist_auth_service/product_session.py`: server-signed trusted-user
   product-session issuing, verification, and process-local logout revocation.
+- `src/ai_assist_auth_service/allowed_users.py`: maps API Gateway-verified
+  Cognito/OIDC subjects to allowed product users and derives tenant/user
+  identity before product-session or OAuth work.
 - `src/ai_assist_auth_service/aws_adapters.py`: KMS token protector, DynamoDB
   OAuth token repository, and Secrets Manager secret resolver.
 - `src/ai_assist_auth_service/google_oauth_adapter.py`: Google OAuth
@@ -59,6 +66,9 @@ The service does not own:
 - Google OAuth start/callback uses signed state with nonce replay protection and tenant/user binding.
 - Deploy-shaped runtime config requires the Google OAuth callback URL to match the configured API callback route.
 - HTTP and SSE route helpers derive identity from the product session and authorize client-supplied references before downstream use.
+- Cognito/OIDC-backed requests map the verified `sub` claim to an active
+  allowlisted product user before OAuth start/status/disconnect or downstream
+  route handling. Client-supplied tenant/user fields are not authority.
 - Raw OAuth tokens and ciphertext are not returned by public service methods.
 - Internal Google Docs token handoff returns an access token only through the injected token-protector boundary after tenant membership, token status, expiry, and required-scope checks.
 - Encryption context includes `tenantId`, `userId`, `provider`, and `purpose=oauth-token`.
@@ -70,6 +80,7 @@ The deployed auth service expects the generic M9 runtime keys plus:
 - `PRODUCT_AUTH_AUDIENCE`
 - `PRODUCT_AUTH_HMAC_SECRET`
 - `PRODUCT_SESSION_TTL_HOURS`
+- `AI_ASSIST_ALLOWED_PRODUCT_USERS_JSON`
 - `OAUTH_STATE_SIGNING_SECRET`
 - `TRUSTED_USER_TENANT_ID`
 - `TRUSTED_USER_USER_ID`
@@ -83,6 +94,9 @@ Secret values must come from deployment-time secret management or ignored local
 configuration. Do not commit plaintext secrets. OAuth client secret refs point
 to Secrets Manager; token ciphertext is stored in DynamoDB and encrypted with
 the shared app KMS key.
+`AI_ASSIST_ALLOWED_PRODUCT_USERS_JSON` is non-secret deployment metadata that
+maps Cognito `sub` values to `tenantId`, `userId`, `role`, and `status`.
+Only active allowed users may create or use product sessions.
 
 ## Task Breakdown
 

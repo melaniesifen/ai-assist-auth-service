@@ -61,12 +61,12 @@ Sources:
 - [x] `AUTH-002` / M9-T9: Add canonical deployed auth HTTP handlers for trusted-user login, logout, session status, server-derived tenant/user identity, expired or revoked session status, and metadata-only errors.
 - [x] `AUTH-003` / M9-T9: Add canonical Google OAuth HTTP handlers for start, callback, status, and disconnect with signed-state replay rejection, tenant/user binding, deployed callback URL validation, and metadata-only responses.
 - [x] `AUTH-003` / M9-T9: Add deploy adapters for Google token exchange/refresh, Secrets Manager OAuth client secret loading, KMS token encryption/decryption, and DynamoDB OAuth token persistence.
-- [ ] M11-T2: Implement multi-user trusted dev session issuance from an
+- [x] M11-T2: Implement multi-user trusted dev session issuance from an
   allowed-user source that maps verified `authSubject` values to distinct
   server-derived `tenantId`, `userId`, role, and active status.
-- [ ] M11-T2: Reject non-allowed, disabled, or inactive users before product
+- [x] M11-T2: Reject non-allowed, disabled, or inactive users before product
   session creation; treat WAF/IP allowlisting as edge access control only.
-- [ ] M11-T2: Add user A/user B tests proving OAuth start, callback, status,
+- [x] M11-T2: Add user A/user B tests proving OAuth start, callback, status,
   disconnect, token refresh, and token handoff are scoped to the authenticated
   user's derived tenant/user identity.
 

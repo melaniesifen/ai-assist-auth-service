@@ -12,6 +12,11 @@ from .aws_adapters import (
     KmsTokenProtector,
     SecretsManagerSecretResolver,
 )
+from .allowed_users import (
+    DEFAULT_ALLOWED_USERS_ENV,
+    AllowedProductUserDirectory,
+    TrustedEdgeJwtSessionMapper,
+)
 from .errors import AUTH_ERROR_CODES, AuthError, authentication_required, validation_failed
 from .google_oauth_adapter import GoogleOAuthHttpTokenExchange
 from .identity import IdentityService
@@ -39,6 +44,7 @@ class AuthHttpApplication:
         trusted_user_user_id: str,
         trusted_user_auth_subject: str,
         trusted_user_bootstrap_secret: str | None = None,
+        trusted_edge_jwt_sessions: TrustedEdgeJwtSessionMapper | None = None,
     ) -> None:
         self.runtime_config = runtime_config
         self.tenant_directory = tenant_directory
@@ -47,6 +53,7 @@ class AuthHttpApplication:
         self.oauth_flow_service = oauth_flow_service
         self.setup_status_service = setup_status_service
         self.product_session_codec = product_session_codec
+        self.trusted_edge_jwt_sessions = trusted_edge_jwt_sessions
         self.trusted_user_tenant_id = trusted_user_tenant_id
         self.trusted_user_user_id = trusted_user_user_id
         self.trusted_user_auth_subject = trusted_user_auth_subject
@@ -194,7 +201,10 @@ class AuthHttpApplication:
         )
 
     def _product_session(self, headers: dict[str, str]) -> dict[str, Any]:
-        product_session = self.product_session_codec.verify_bearer(headers.get("authorization"))
+        if headers.get("x-ai-assist-auth-subject") and self.trusted_edge_jwt_sessions is not None:
+            product_session = self.trusted_edge_jwt_sessions.product_session_from_headers(headers)
+        else:
+            product_session = self.product_session_codec.verify_bearer(headers.get("authorization"))
         product_session["requestId"] = headers.get("x-request-id") or product_session.get("requestId")
         product_session["correlationId"] = headers.get("x-correlation-id") or product_session.get("correlationId")
         return product_session
@@ -203,7 +213,8 @@ class AuthHttpApplication:
 def create_app_from_env(env: dict[str, str] | None = None) -> AuthHttpApplication:
     env = env or dict(os.environ)
     runtime_config = AuthRuntimeConfig.from_mapping(env)
-    tenant_directory = _bootstrap_tenant_directory(env)
+    allowed_users = AllowedProductUserDirectory.from_json(env.get(DEFAULT_ALLOWED_USERS_ENV))
+    tenant_directory = _bootstrap_tenant_directory(env, allowed_users=allowed_users)
     revocations = InMemorySessionRevocationRepository()
     product_sessions = HmacProductSessionCodec(
         signing_secret=_required_mapping(env, "PRODUCT_AUTH_HMAC_SECRET"),
@@ -267,6 +278,11 @@ def create_app_from_env(env: dict[str, str] | None = None) -> AuthHttpApplicatio
         trusted_user_user_id=_required_mapping(env, "TRUSTED_USER_USER_ID"),
         trusted_user_auth_subject=_required_mapping(env, "TRUSTED_USER_AUTH_SUBJECT"),
         trusted_user_bootstrap_secret=env.get("TRUSTED_USER_BOOTSTRAP_SECRET"),
+        trusted_edge_jwt_sessions=TrustedEdgeJwtSessionMapper(
+            allowed_users=allowed_users,
+            audience=_required_mapping(env, "PRODUCT_AUTH_AUDIENCE"),
+            issuer=_required_mapping(env, "PRODUCT_AUTH_ISSUER"),
+        ),
     )
 
 
@@ -296,8 +312,14 @@ def handle_http_request(
     )
 
 
-def _bootstrap_tenant_directory(env: dict[str, str]) -> InMemoryTenantDirectory:
+def _bootstrap_tenant_directory(
+    env: dict[str, str],
+    *,
+    allowed_users: AllowedProductUserDirectory | None = None,
+) -> InMemoryTenantDirectory:
     tenant_directory = InMemoryTenantDirectory()
+    if allowed_users is not None:
+        allowed_users.seed_tenant_directory(tenant_directory)
     tenant_id = _required_mapping(env, "TRUSTED_USER_TENANT_ID")
     user_id = _required_mapping(env, "TRUSTED_USER_USER_ID")
     tenant_directory.put_tenant(tenant_id=tenant_id)
