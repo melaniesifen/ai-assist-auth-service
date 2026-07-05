@@ -148,6 +148,7 @@ class FakeGoogleTokenExchange:
         }
         self.fail_exchange = False
         self.fail_refresh = False
+        self.exchange_exception: Exception | None = None
         self.exchange_calls: list[dict[str, object]] = []
         self.refresh_calls: list[dict[str, object]] = []
 
@@ -155,6 +156,8 @@ class FakeGoogleTokenExchange:
         self.exchange_calls.append(
             {"authorizationCode": authorization_code, "redirectUri": redirect_uri}
         )
+        if self.exchange_exception is not None:
+            raise self.exchange_exception
         if self.fail_exchange:
             raise RuntimeError("exchange failed")
         return dict(self.exchange_response)

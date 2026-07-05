@@ -19,6 +19,7 @@ from ai_assist_auth_service import (  # noqa: E402
     InMemoryOAuthStateRepository,
     SignedOAuthStateCodec,
 )
+from ai_assist_auth_service.google_oauth_adapter import GoogleOAuthExchangeError
 
 
 class FakeAuditSink:
@@ -186,6 +187,36 @@ class GoogleOAuthFlowServiceTest(unittest.TestCase):
 
         self.assertEqual(fixture.token_repository.records, {})
         self.assert_metadata_only(audit_sink.events)
+
+    def test_callback_exchange_failure_returns_safe_google_error_details(self) -> None:
+        fixture = create_auth_fixture()
+        fixture.token_exchange.exchange_exception = GoogleOAuthExchangeError(
+            error_code="invalid_client",
+            status=401,
+        )
+        flow = self.create_flow(fixture=fixture)
+        identity = fixture.identity_service.derive_identity(product_session=product_session())
+        start = flow.start_google_oauth(identity=identity, redirect_target="/setup")
+
+        with self.assertRaisesRegex(Exception, "Google OAuth code exchange failed") as caught:
+            flow.complete_google_oauth(
+                identity=identity,
+                state=start["state"],
+                authorization_code="authorization-code-secret",
+            )
+
+        self.assertEqual(caught.exception.code, AUTH_ERROR_CODES["OAUTH_EXCHANGE_FAILED"])
+        self.assertEqual(caught.exception.status, 502)
+        self.assertEqual(
+            caught.exception.details,
+            {
+                "dependencyStatus": "google_token_exchange_failed",
+                "googleError": "invalid_client",
+                "googleStep": "unknown",
+                "tokenHttpStatus": 401,
+            },
+        )
+        self.assert_metadata_only(caught.exception.to_response())
 
     def test_callback_malformed_exchange_response_fails_safely_without_storing_tokens(self) -> None:
         fixture = create_auth_fixture()

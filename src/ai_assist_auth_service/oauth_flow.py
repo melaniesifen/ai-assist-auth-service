@@ -10,12 +10,15 @@ from typing import Any, Callable
 from urllib.parse import urlencode
 
 from .errors import AUTH_ERROR_CODES, AuthError, validation_failed
+from .google_oauth_adapter import GoogleOAuthExchangeError
 from .identity import require_identity
 from .oauth_tokens import OAUTH_PROVIDERS, OAuthTokenService
 from .validation import clone_datetime, freeze, require_datetime, require_non_empty_string, to_iso
 
 
 GOOGLE_OAUTH_SCOPES = (
+    "openid",
+    "email",
     "https://www.googleapis.com/auth/documents",
     "https://www.googleapis.com/auth/drive.metadata.readonly",
 )
@@ -194,6 +197,19 @@ class GoogleOAuthFlowService:
                 authorization_code=authorization_code,
                 redirect_uri=self.redirect_uri,
             )
+        except GoogleOAuthExchangeError as error:
+            self._audit(OAUTH_AUDIT_EVENTS["DENIED"], identity=identity, status="exchange_failed")
+            raise AuthError(
+                code=AUTH_ERROR_CODES["OAUTH_EXCHANGE_FAILED"],
+                message="Google OAuth code exchange failed.",
+                status=502,
+                details={
+                    "dependencyStatus": "google_token_exchange_failed",
+                    "googleError": error.error_code,
+                    "googleStep": error.step,
+                    "tokenHttpStatus": error.status,
+                },
+            )
         except Exception:
             self._audit(OAUTH_AUDIT_EVENTS["DENIED"], identity=identity, status="exchange_failed")
             raise AuthError(
@@ -266,7 +282,7 @@ class GoogleOAuthFlowService:
 
 
 def _normalize_scopes(scopes: list[str] | tuple[str, ...]) -> tuple[str, ...]:
-    normalized = tuple(sorted({str(scope).strip() for scope in scopes if str(scope).strip()}))
+    normalized = tuple(dict.fromkeys(str(scope).strip() for scope in scopes if str(scope).strip()))
     if len(normalized) == 0:
         raise validation_failed("scopes", "At least one OAuth scope is required.")
     return normalized
