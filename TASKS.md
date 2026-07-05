@@ -69,6 +69,8 @@ Sources:
 - [x] M11-T2: Add user A/user B tests proving OAuth start, callback, status,
   disconnect, token refresh, and token handoff are scoped to the authenticated
   user's derived tenant/user identity.
+- [x] M12: Treat full Google Docs OAuth scope as satisfying readonly context
+  handoff requirements while preserving insufficient-scope reconnect behavior.
 
 ## Quality And Production Tasks
 

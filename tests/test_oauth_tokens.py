@@ -253,6 +253,32 @@ class OAuthTokenServiceTest(unittest.TestCase):
             },
         )
 
+    def test_google_token_handoff_treats_full_docs_scope_as_satisfying_readonly_scope(self) -> None:
+        fixture = create_auth_fixture()
+        identity = fixture.identity_service.derive_identity(product_session=product_session())
+        fixture.oauth_token_service.connect_google(
+            identity=identity,
+            google_account_id="google-account-1",
+            scopes=[
+                "https://www.googleapis.com/auth/documents",
+                "https://www.googleapis.com/auth/drive.metadata.readonly",
+            ],
+            access_token="access-token-secret",
+            refresh_token="refresh-token-secret",
+            expires_at=LATER_TIME,
+        )
+
+        handoff = fixture.oauth_token_service.get_google_access_token(
+            identity=identity,
+            google_account_id="google-account-1",
+            operation=GOOGLE_TOKEN_HANDOFF_OPERATIONS["READ_CONTEXT"],
+            required_scopes=["https://www.googleapis.com/auth/documents.readonly"],
+        )
+
+        self.assertEqual(handoff["status"], "active")
+        self.assertEqual(handoff["accessToken"], "access-token-secret")
+        self.assertFalse(handoff["reconnectRequired"])
+
     def test_google_token_handoff_returns_reconnect_required_for_unavailable_tokens(self) -> None:
         fixture = create_auth_fixture()
         identity = fixture.identity_service.derive_identity(product_session=product_session())

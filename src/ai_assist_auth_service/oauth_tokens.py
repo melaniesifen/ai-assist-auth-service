@@ -21,6 +21,8 @@ GOOGLE_TOKEN_HANDOFF_OPERATIONS = MappingProxyType(
 
 _OAUTH_TOKEN_PURPOSE = "oauth-token"
 _GOOGLE_OAUTH_RECONNECT_REQUIRED = "OAUTH_RECONNECT_REQUIRED"
+_GOOGLE_DOCS_SCOPE = "https://www.googleapis.com/auth/documents"
+_GOOGLE_DOCS_READONLY_SCOPE = "https://www.googleapis.com/auth/documents.readonly"
 
 
 class InMemoryOAuthTokenRepository:
@@ -364,7 +366,10 @@ class OAuthTokenService:
                 message="Google OAuth connection has expired.",
             )
 
-        missing_scopes = [scope for scope in normalized_required_scopes if scope not in record["scopes"]]
+        missing_scopes = _missing_required_scopes(
+            granted_scopes=list(record["scopes"]),
+            required_scopes=normalized_required_scopes,
+        )
         if missing_scopes:
             return _reconnect_required_handoff(
                 identity=identity,
@@ -516,6 +521,19 @@ def _normalize_scopes(scopes: list[Any]) -> list[str]:
     if len(normalized) == 0:
         raise validation_failed("scopes", "At least one OAuth scope is required.")
     return normalized
+
+
+def _missing_required_scopes(*, granted_scopes: list[str], required_scopes: list[str]) -> list[str]:
+    granted = set(granted_scopes)
+    return [scope for scope in required_scopes if not _is_scope_satisfied(scope, granted)]
+
+
+def _is_scope_satisfied(required_scope: str, granted_scopes: set[str]) -> bool:
+    if required_scope in granted_scopes:
+        return True
+    if required_scope == _GOOGLE_DOCS_READONLY_SCOPE and _GOOGLE_DOCS_SCOPE in granted_scopes:
+        return True
+    return False
 
 
 def _encryption_context(identity: dict[str, Any], provider: str) -> dict[str, str]:
